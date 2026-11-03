@@ -21,6 +21,13 @@ pub const PLUS_TOP: &str = "FilmCraft Plus";
 const SHAKE: &[&str] = &[PLUS_TOP, "Shake & Motion"];
 const FLICKER: &[&str] = &[PLUS_TOP, "Flicker & Glitch"];
 const LOOKS: &[&str] = &[PLUS_TOP, "Looks"];
+const MUSIC: &[&str] = &[PLUS_TOP, "Music"];
+
+/// Music Sync: what the effect locks to. `Markers ▸ Sync Plus Effects to Music` fills in the
+/// tempo and the first beat from the selected music clip.
+pub const SYNC_MODES: &[&str] = &["Off", "Every Beat", "Every 2 Beats", "Every Bar (4 Beats)", "Half Beats"];
+/// Beat Pulse presets (index 0 = Custom).
+pub const PULSE_PRESETS: &[&str] = &["Custom", "Bass Punch", "Flash", "Glow Hit", "RGB Kick", "Zoom Bounce", "Shake Hit"];
 
 /// Organic Shake presets (index 0 = Custom: the sliders below are used as they are).
 pub const SHAKE_PRESETS: &[&str] = &["Custom", "Handheld", "Walking", "Running", "Car Ride", "Earthquake", "Impact Hit", "Drone Drift", "Heartbeat"];
@@ -48,6 +55,16 @@ pub const BLUR_QUALITY: &[&str] = &["Draft", "Normal", "High"];
 fn pct(id: &'static str, label: &'static str, def: f64) -> ParamDef {
     fs(id, label, def, (0.0, 100.0), (0.0, 100.0), "%", 1)
 }
+/// The Music Sync group shared by the Plus effects (`sync_default` = index into [`SYNC_MODES`]).
+fn music_sync(sync_default: u32) -> Vec<ParamDef> {
+    const G: &str = "Music Sync";
+    vec![
+        grp(ch("sync", "Sync to Music", SYNC_MODES, sync_default), G),
+        grp(fs("bpm", "Tempo (BPM)", 120.0, (20.0, 400.0), (60.0, 200.0), "", 2), G),
+        grp(fs("beat_offset", "First Beat", 0.0, (-600.0, 600.0), (-2.0, 2.0), "s", 3), G),
+    ]
+}
+
 fn seed() -> ParamDef {
     fs("seed", "Random Seed", 0.0, (0.0, 10000.0), (0.0, 1000.0), "", 0)
 }
@@ -73,7 +90,10 @@ fn organic_shake() -> EffectDef {
             ch("blur_quality", "Motion Blur Quality", BLUR_QUALITY, 1),
             b("auto_scale", "Hide Edges (Auto Scale)", true),
             seed(),
-        ],
+        ]
+        .into_iter()
+        .chain(music_sync(0))
+        .collect(),
     )
 }
 
@@ -106,7 +126,10 @@ fn flicker_stack() -> EffectDef {
             grp(fs("split_amt", "Color Split Amount", 14.0, (0.0, 500.0), (0.0, 100.0), "", 1), A),
             grp(fs("time_amt", "Time Jump (frames)", 4.0, (1.0, 60.0), (1.0, 15.0), "", 0), A),
             seed(),
-        ],
+        ]
+        .into_iter()
+        .chain(music_sync(0))
+        .collect(),
     )
 }
 
@@ -147,8 +170,30 @@ fn look_builder() -> EffectDef {
     )
 }
 
+fn beat_pulse() -> EffectDef {
+    const G: &str = "Custom Pulse";
+    let mut ps = vec![
+        ch("preset", "Preset", PULSE_PRESETS, 1),
+        fs("amount", "Amount", 100.0, (0.0, 1000.0), (0.0, 200.0), "%", 1),
+        grp(fs("decay", "Pulse Length", 35.0, (2.0, 100.0), (5.0, 100.0), "%", 1), G),
+        grp(fs("zoom", "Zoom", 6.0, (0.0, 100.0), (0.0, 30.0), "%", 1), G),
+        grp(fs("light", "Brightness", 30.0, (0.0, 500.0), (0.0, 200.0), "%", 1), G),
+        grp(pct("glow", "Glow", 0.0), G),
+        grp(fs("split", "RGB Split", 0.0, (0.0, 500.0), (0.0, 80.0), "", 1), G),
+        grp(fs("shake", "Shake", 0.0, (0.0, 500.0), (0.0, 80.0), "", 1), G),
+        grp(fs("blur", "Blur", 0.0, (0.0, 200.0), (0.0, 60.0), "", 1), G),
+        b("accent_bar", "Accent First Beat of Bar", true),
+        seed(),
+    ];
+    ps.extend(music_sync(1));
+    video("beat_pulse", "Beat Pulse", MUSIC, ps)
+}
+
+/// The Plus effects that follow the music (they carry the Music Sync group).
+pub const MUSIC_SYNCED: &[&str] = &["organic_shake", "flicker_stack", "beat_pulse"];
+
 pub(super) fn defs() -> Vec<EffectDef> {
-    let mut v = vec![organic_shake(), flicker_stack(), look_builder()];
+    let mut v = vec![organic_shake(), flicker_stack(), look_builder(), beat_pulse()];
     for d in &mut v {
         d.accelerated = false;
         d.float32 = true;
@@ -163,7 +208,7 @@ mod tests {
 
     #[test]
     fn plus_effects_are_registered_in_their_folder() {
-        for id in ["organic_shake", "flicker_stack", "look_builder"] {
+        for id in ["organic_shake", "flicker_stack", "look_builder", "beat_pulse"] {
             let d = find_effect(id).unwrap_or_else(|| panic!("missing {id}"));
             assert_eq!(d.category.first(), Some(&super::PLUS_TOP), "{id}");
             // every parameter id is unique

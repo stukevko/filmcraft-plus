@@ -64,6 +64,52 @@ Pastelltraum, Noir, Neonnacht, Goldene Stunde, Grüner Code, Verblasst matt, Kin
 **Stärke** blendet den Look stufenlos ein. Für einen eigenen Look „Eigene“ wählen und die
 Regler der fünf Gruppen nutzen. Hautglättung wirkt auch zusätzlich zu einem fertigen Look.
 
+## Musikvideos: alles im Takt
+
+### Beat-Marker setzen
+
+Musik-Clip in der Zeitleiste auswählen ▸ **Marker ▸ Beat-Marker aus Musik setzen**.
+FilmCraft erkennt Tempo und Beats und setzt auf jeden Beat einen Marker: **rosa** = erster Beat
+im Takt, **gelb** = die übrigen. Mit **Sequenz ▸ In der Timeline einrasten** (S) springen Schnitte und Clips
+genau auf die Beats. Nochmals ausführen ersetzt die alten Beat-Marker.
+
+### Effekte mit der Musik synchronisieren
+
+1. Organisches Wackeln, Flacker-Stapel oder Beat-Puls auf deine Video-Clips legen.
+2. Musik-Clip auswählen ▸ **Marker ▸ Plus-Effekte mit Musik synchronisieren**.
+
+Alle Plus-Effekte der Sequenz bekommen Tempo und ersten Beat aus der Musik und schalten
+**Mit Musik synchronisieren** ein. Danach sitzen die Stöße, Zuckungen und Pulse genau auf den
+Beats. In der Gruppe **Musik-Sync** wählst du: Jeder Beat, Alle 2 Beats, Jeder Takt, Halbe Beats.
+
+### Beat-Puls (Beat Pulse)
+
+Der Klassiker für Musikvideos: Bei jedem Beat „springt“ das Bild und klingt bis zum nächsten
+wieder ab. Vorgaben: **Bass-Punch** (Zoom + leichtes Wackeln), **Blitz**, **Glow-Treffer**,
+**RGB-Kick**, **Zoom-Bounce**, **Wackel-Treffer**. Der erste Beat im Takt wird etwas stärker
+betont. Ohne Sync hält der Effekt den vollen Puls – dann per Keyframes auf **Stärke** steuern.
+
+## YouTube
+
+### Fertige Export-Vorgaben
+
+Im Export unter **Vorgaben ▸ FilmCraft Plus**:
+
+- **YouTube 1080p – Plus (RTX, −14 LUFS)**: H.264, 24 Mbit/s
+- **YouTube 4K – Plus (RTX HEVC, −14 LUFS)**: H.265 über die RTX 2080, 60 Mbit/s
+- **YouTube Shorts – Plus (RTX, −14 LUFS)**: 1080×1920 Hochformat
+
+Alle laufen über NVENC und normalisieren den Ton auf **−14 LUFS** (true peak −1 dBTP). Das ist
+der Pegel, auf den YouTube regelt – dein Video wird also nicht leiser gedreht.
+
+### Automatische Untertitel
+
+Spracherkennung (Whisper) ist in diesem Build eingeschaltet und läuft komplett lokal auf deinem
+PC. **Sequenz ▸ Sequenz transkribieren…** – beim ersten Mal wird das Sprachmodell einmalig
+heruntergeladen. Danach **Sequenz ▸ Transkript ▸ Untertitel aus Transkript erstellen…**, Text
+korrigieren und über **Datei ▸ Exportieren ▸ Untertitel…** als SRT für YouTube speichern. Über das Transkript kannst du
+auch Text-basiert schneiden, Pausen und Füllwörter („äh“, „ähm“) entfernen.
+
 ## Optimierungen für deinen PC
 
 - **CPU:** Der Build ist für Arrow Lake-S kompiliert (`target-cpu=arrowlake-s`: AVX2, FMA,

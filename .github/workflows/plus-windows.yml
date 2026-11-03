@@ -42,7 +42,7 @@ jobs:
         with:
           key: plus-arrowlake
       - name: Build
-        run: cargo build --release --locked -p filmcraft --target x86_64-pc-windows-msvc
+        run: cargo build --release --locked -p filmcraft --features whisper --target x86_64-pc-windows-msvc
       - name: Package
         shell: pwsh
         run: |

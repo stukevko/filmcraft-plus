@@ -532,6 +532,7 @@ pub fn apply(img: &mut Image, e: &EffectInstance, cx: &FxCtx) -> bool {
         "organic_shake" => plus::organic_shake(img, e, cx),
         "flicker_stack" => plus::flicker_stack(img, e, cx),
         "look_builder" => plus::look_builder(img, e, cx),
+        "beat_pulse" => plus::beat_pulse(img, e, cx),
         id if id.starts_with("vr_") => immersive::apply(img, e, cx),
         _ => return false,
     }

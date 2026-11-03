@@ -3741,3 +3741,28 @@
 	Neon Night	Neonnacht
 	Green Code	Grüner Code
 	Cinema Contrast	Kino-Kontrast
+	Beat Pulse	Beat-Puls
+	Music Sync	Musik-Sync
+	Sync to Music	Mit Musik synchronisieren
+	Tempo (BPM)	Tempo (BPM)
+	First Beat	Erster Beat
+	Every Beat	Jeder Beat
+	Every 2 Beats	Alle 2 Beats
+	Every Bar (4 Beats)	Jeder Takt (4 Beats)
+	Half Beats	Halbe Beats
+	Bass Punch	Bass-Punch
+	Glow Hit	Glow-Treffer
+	RGB Kick	RGB-Kick
+	Zoom Bounce	Zoom-Bounce
+	Shake Hit	Wackel-Treffer
+	Custom Pulse	Eigener Puls
+	Pulse Length	Pulslänge
+	Accent First Beat of Bar	Ersten Beat im Takt betonen
+	Add Beat Markers from Music	Beat-Marker aus Musik setzen
+	Sync Plus Effects to Music	Plus-Effekte mit Musik synchronisieren
+	YouTube 1080p – Plus (RTX, −14 LUFS)	YouTube 1080p – Plus (RTX, −14 LUFS)
+	YouTube 4K – Plus (RTX HEVC, −14 LUFS)	YouTube 4K – Plus (RTX HEVC, −14 LUFS)
+	YouTube Shorts – Plus (RTX, −14 LUFS)	YouTube Shorts – Plus (RTX, −14 LUFS)
+	H.264 1920×1080 on the GPU encoder (NVENC), VBR 24 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS	H.264 1920×1080 über den GPU-Encoder (NVENC), VBR 24 Mbit/s, AAC 320 kbit/s, Lautheit auf −14 LUFS normalisiert
+	H.265 3840×2160 on the GPU encoder (NVENC), VBR 60 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS	H.265 3840×2160 über den GPU-Encoder (NVENC), VBR 60 Mbit/s, AAC 320 kbit/s, Lautheit auf −14 LUFS normalisiert
+	H.264 1080×1920 portrait on the GPU encoder (NVENC), scaled to fill, VBR 16 Mbps, loudness normalized to −14 LUFS	H.264 1080×1920 Hochformat über den GPU-Encoder (NVENC), füllend skaliert, VBR 16 Mbit/s, Lautheit auf −14 LUFS normalisiert

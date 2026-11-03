@@ -61,6 +61,66 @@ fn hsv(h: f32, s: f32, v: f32) -> [f32; 3] {
     }
 }
 
+/// Horizontal red / blue shift by `d` layer pixels (green stays).
+fn rgb_shift(img: &mut Image, d: f32) {
+    if !d.is_finite() || d.abs() <= 0.2 {
+        return;
+    }
+    let src = img.clone();
+    let w = img.w;
+    img.px.par_chunks_mut(w * 4).enumerate().for_each(|(y, row)| {
+        let py = y as f32 + 0.5;
+        for x in 0..w {
+            let px = x as f32 + 0.5;
+            let rr = src.sample_bilinear(px - d, py);
+            let g = src.get(x, y);
+            let bb = src.sample_bilinear(px + d, py);
+            let p = &mut row[x * 4..x * 4 + 4];
+            p[0] = rr[0];
+            p[1] = g[1];
+            p[2] = bb[2];
+            p[3] = rr[3].max(g[3]).max(bb[3]);
+        }
+    });
+}
+
+/// Where the clip stands in the music (Music Sync group): the index of the current beat (or
+/// beat group), seconds since it started, and the interval between them. `None` when Sync to
+/// Music is Off.
+struct BeatClock {
+    index: i64,
+    since: f64,
+    interval: f64,
+    /// Beats per sync interval (so `index` can be turned back into a beat number).
+    beats_per: f64,
+}
+
+fn beat_clock(e: &EffectInstance, cx: &FxCtx) -> Option<BeatClock> {
+    let mode = chv(e, "sync");
+    if mode == 0 {
+        return None;
+    }
+    let bpm = fv(e, "bpm", cx) as f64;
+    let bpm = if bpm.is_finite() { bpm.clamp(20.0, 400.0) } else { 120.0 };
+    let beat = 60.0 / bpm;
+    let beats_per = match mode {
+        2 => 2.0,
+        3 => 4.0,
+        4 => 0.5,
+        _ => 1.0,
+    };
+    let interval = beat * beats_per;
+    let off = fv(e, "beat_offset", cx) as f64;
+    let off = if off.is_finite() { off } else { 0.0 };
+    let t = if cx.seconds.is_finite() { cx.seconds } else { 0.0 };
+    let pos = (t - off) / interval;
+    if !pos.is_finite() {
+        return None;
+    }
+    let idx = pos.floor();
+    Some(BeatClock { index: idx.clamp(-1e15, 1e15) as i64, since: (pos - idx) * interval, interval, beats_per })
+}
+
 // ================================================================== Organic Shake
 
 #[derive(Clone, Copy)]
@@ -158,7 +218,9 @@ pub fn organic_shake(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     let seed = seed_of(e, cx);
     let t0 = if cx.seconds.is_finite() { cx.seconds } else { 0.0 };
     let env = if s.decay > 1e-3 { (-t0.max(0.0) / s.decay).exp() } else { 1.0 };
-    let amp = inten * env;
+    // Music Sync: a fresh hit on every beat that dies away before the next one
+    let beat_env = beat_clock(e, cx).map_or(1.0, |b| 0.1 + 0.9 * (-b.since / (b.interval * 0.35)).exp());
+    let amp = inten * env * beat_env;
     if amp <= 1e-4 {
         return;
     }
@@ -367,11 +429,16 @@ pub fn flicker_stack(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     }
     let seed = seed_of(e, cx);
     let t = if cx.seconds.is_finite() { cx.seconds.max(0.0) } else { 0.0 };
-    let pos = t * f.rate;
-    let slot = pos.floor() as i64;
-    let frac = (pos - pos.floor()) as f32;
+    // free-running slots, or one slot per beat (most beats fire) with Music Sync
+    let (slot, frac, density) = match beat_clock(e, cx) {
+        Some(b) => (b.index, (b.since / b.interval) as f32, f.density.max(0.75)),
+        None => {
+            let pos = t * f.rate;
+            (pos.floor().clamp(-1e15, 1e15) as i64, (pos - pos.floor()) as f32, f.density)
+        }
+    };
     let r = |a: i64, b: i64| hash01(slot, a, b, seed);
-    if r(0, 1) as f64 >= f.density {
+    if r(0, 1) as f64 >= density {
         return;
     }
     let strength = ((0.35 + 0.65 * r(1, 1)) * (1.0 - 0.45 * frac)) as f64 * amount;
@@ -425,24 +492,7 @@ pub fn flicker_stack(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     }
     if on[5] {
         let d = (f.split * k * strength) as f32 * if dir(2) < 0.0 { -1.0 } else { 1.0 };
-        if d.abs() > 0.2 {
-            let src = img.clone();
-            let w = img.w;
-            img.px.par_chunks_mut(w * 4).enumerate().for_each(|(y, row)| {
-                let py = y as f32 + 0.5;
-                for x in 0..w {
-                    let px = x as f32 + 0.5;
-                    let rr = src.sample_bilinear(px - d, py);
-                    let g = src.get(x, y);
-                    let bb = src.sample_bilinear(px + d, py);
-                    let p = &mut row[x * 4..x * 4 + 4];
-                    p[0] = rr[0];
-                    p[1] = g[1];
-                    p[2] = bb[2];
-                    p[3] = rr[3].max(g[3]).max(bb[3]);
-                }
-            });
-        }
+        rgb_shift(img, d);
     }
     let color_k = if on[1] { (f.color * strength).clamp(0.0, 1.0) as f32 } else { 0.0 };
     let light_k = if on[2] { (f.light * strength) as f32 } else { 0.0 };
@@ -466,6 +516,121 @@ pub fn flicker_stack(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
             }
             c
         });
+    }
+}
+
+// ================================================================== Beat Pulse
+
+#[derive(Clone, Copy)]
+struct Pulse {
+    /// Pulse length as a fraction of the interval between pulses.
+    decay: f64,
+    zoom: f64,
+    light: f64,
+    glow: f64,
+    split: f64,
+    shake: f64,
+    blur: f64,
+}
+
+/// Presets in `PULSE_PRESETS` order after Custom (zoom %, brightness %, glow 0..1, HD pixels).
+const PULSES: [Pulse; 6] = [
+    // Bass Punch
+    Pulse { decay: 0.30, zoom: 6.0, light: 0.25, glow: 0.0, split: 0.0, shake: 6.0, blur: 0.0 },
+    // Flash
+    Pulse { decay: 0.25, zoom: 0.0, light: 1.8, glow: 0.0, split: 0.0, shake: 0.0, blur: 0.0 },
+    // Glow Hit
+    Pulse { decay: 0.40, zoom: 2.0, light: 0.3, glow: 0.6, split: 0.0, shake: 0.0, blur: 0.0 },
+    // RGB Kick
+    Pulse { decay: 0.25, zoom: 3.0, light: 0.1, glow: 0.0, split: 18.0, shake: 0.0, blur: 0.0 },
+    // Zoom Bounce
+    Pulse { decay: 0.45, zoom: 12.0, light: 0.0, glow: 0.0, split: 0.0, shake: 0.0, blur: 4.0 },
+    // Shake Hit
+    Pulse { decay: 0.30, zoom: 3.0, light: 0.1, glow: 0.0, split: 6.0, shake: 25.0, blur: 0.0 },
+];
+
+fn pulse_params(e: &EffectInstance, cx: &FxCtx) -> Pulse {
+    let p = chv(e, "preset") as usize;
+    if p >= 1
+        && let Some(v) = PULSES.get(p - 1)
+    {
+        return *v;
+    }
+    let g = |id: &str| {
+        let v = fv(e, id, cx) as f64;
+        if v.is_finite() { v.max(0.0) } else { 0.0 }
+    };
+    Pulse {
+        decay: (g("decay") / 100.0).clamp(0.02, 1.0),
+        zoom: g("zoom").min(100.0),
+        light: g("light") / 100.0,
+        glow: (g("glow") / 100.0).min(1.0),
+        split: g("split"),
+        shake: g("shake"),
+        blur: g("blur"),
+    }
+}
+
+/// Beat Pulse: on every beat (Music Sync) the picture punches in, flashes, glows, splits, shakes
+/// or blurs, and eases back before the next beat. With Sync Off it holds the full pulse, so the
+/// Amount can be keyframed by hand.
+pub fn beat_pulse(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
+    let p = pulse_params(e, cx);
+    let amount = (fv(e, "amount", cx) as f64 / 100.0).max(0.0);
+    if !amount.is_finite() || amount <= 1e-4 || img.w == 0 || img.h == 0 {
+        return;
+    }
+    let clock = beat_clock(e, cx);
+    let (env, index, since) = match &clock {
+        Some(b) => {
+            // a 10 ms attack so the punch does not click, then an exponential release
+            let attack = (b.since / 0.01).min(1.0);
+            let release = (-b.since / (b.interval * p.decay)).exp();
+            // the first beat of each bar hits a little harder
+            let beat_no = (b.index as f64 * b.beats_per).floor() as i64;
+            let accent = if bv(e, "accent_bar") && b.beats_per <= 1.0 && beat_no.rem_euclid(4) == 0 { 1.3 } else { 1.0 };
+            (attack * release * accent, b.index, b.since)
+        }
+        None => (1.0, 0, 0.0),
+    };
+    let kk = env * amount;
+    if kk <= 1e-4 {
+        return;
+    }
+    let k = hd(img);
+    let seed = seed_of(e, cx);
+    // zoom + shake in one resample
+    let sc = 1.0 + p.zoom / 100.0 * kk;
+    let sh = if p.shake > 0.0 {
+        let ang = hash01(index, 1, 7, seed) as f64 * std::f64::consts::TAU;
+        let wob = (since * 45.0).cos();
+        let d = p.shake * k * kk * wob;
+        Vec2::new(ang.cos() * d, ang.sin() * d)
+    } else {
+        Vec2::new(0.0, 0.0)
+    };
+    if (sc - 1.0).abs() > 1e-4 || sh.length() > 0.05 {
+        let c = Vec2::new(img.w as f64 / 2.0, img.h as f64 / 2.0);
+        place(img, c, sh, sc, 0.0);
+    }
+    if p.blur > 0.0 {
+        let sigma = (p.blur * k * kk * 0.5) as f32;
+        if sigma > 0.3 {
+            *img = soft_blur(img, sigma);
+        }
+    }
+    if p.split > 0.0 {
+        let sign = if hash01(index, 2, 7, seed) < 0.5 { -1.0 } else { 1.0 };
+        rgb_shift(img, (p.split * k * kk) as f32 * sign);
+    }
+    if p.glow > 1e-3 {
+        let hi = soft_blur(&highlights(img, 0.55, 0.25), (22.0 * k) as f32);
+        let amt = (p.glow * kk * 1.6) as f32;
+        img.px.par_chunks_mut(4).zip(hi.px.par_chunks(4)).for_each(|(px, h)| add_light(px, [h[0] * amt, h[1] * amt, h[2] * amt]));
+    }
+    if p.light > 1e-3 {
+        let g = (1.0 + p.light * kk) as f32;
+        img.map_rgb(|c, _, _| [c[0] * g, c[1] * g, c[2] * g]);
     }
 }
 
@@ -884,7 +1049,7 @@ mod tests {
 
     #[test]
     fn every_preset_renders_finite_pixels_and_changes_the_picture() {
-        for (id, param, n) in [("organic_shake", "preset", 9u32), ("flicker_stack", "preset", 7), ("look_builder", "look", 13)] {
+        for (id, param, n) in [("organic_shake", "preset", 9u32), ("flicker_stack", "preset", 7), ("look_builder", "look", 13), ("beat_pulse", "preset", 7)] {
             for p in 1..n {
                 let mut e = find_effect(id).unwrap().instance();
                 set(&mut e, param, ParamValue::Choice(p));
@@ -899,6 +1064,7 @@ mod tests {
                     let cx = cx_at(0.13 + s as f64 * 0.37);
                     match id {
                         "organic_shake" => organic_shake(&mut img, &e, &cx),
+                        "beat_pulse" => beat_pulse(&mut img, &e, &cx),
                         "flicker_stack" => flicker_stack(&mut img, &e, &cx),
                         _ => look_builder(&mut img, &e, &cx),
                     }
@@ -937,12 +1103,13 @@ mod tests {
 
     #[test]
     fn hostile_parameters_do_not_crash() {
-        for id in ["organic_shake", "flicker_stack", "look_builder"] {
+        for id in ["organic_shake", "flicker_stack", "look_builder", "beat_pulse"] {
             let def = find_effect(id).unwrap();
             for bad in [f64::NAN, f64::INFINITY, -1e12, 1e12] {
                 let mut e = def.instance();
                 set(&mut e, "preset", ParamValue::Choice(0));
                 set(&mut e, "look", ParamValue::Choice(99));
+                set(&mut e, "sync", ParamValue::Choice(if bad.is_nan() { 3 } else { 1 }));
                 for p in &def.params {
                     if matches!(p.default, ParamValue::Float(_)) {
                         set(&mut e, p.id, ParamValue::Float(bad));
@@ -953,6 +1120,7 @@ mod tests {
                     match id {
                         "organic_shake" => organic_shake(&mut img, &e, &cx_at(f64::NAN)),
                         "flicker_stack" => flicker_stack(&mut img, &e, &cx_at(2.0)),
+                        "beat_pulse" => beat_pulse(&mut img, &e, &cx_at(2.0)),
                         _ => look_builder(&mut img, &e, &cx_at(2.0)),
                     }
                 }
@@ -967,6 +1135,47 @@ mod tests {
         for (x, y) in [(f32::MAX, 1.0), (1.0, f32::MAX), (f32::INFINITY, f32::INFINITY), (-f32::MAX, 2.0)] {
             assert_eq!(img.sample_bilinear(x, y), [0.0; 4]);
         }
+    }
+
+    fn diff(a: &Image, b: &Image) -> f32 {
+        a.px.iter().zip(&b.px).map(|(x, y)| (x - y).abs()).sum::<f32>() / a.px.len().max(1) as f32
+    }
+
+    #[test]
+    fn beat_pulse_hits_on_the_beat_and_releases_before_the_next() {
+        let src = test_image();
+        let mut e = find_effect("beat_pulse").unwrap().instance();
+        set(&mut e, "bpm", ParamValue::Float(120.0)); // a beat every 0.5 s
+        set(&mut e, "beat_offset", ParamValue::Float(0.1));
+        let at = |t: f64| {
+            let mut img = src.clone();
+            beat_pulse(&mut img, &e, &cx_at(t));
+            diff(&img, &src)
+        };
+        let hit = at(0.1 + 0.5 * 3.0 + 0.02);
+        let tail = at(0.1 + 0.5 * 3.0 + 0.48);
+        assert!(hit > 0.01, "no pulse on the beat ({hit})");
+        assert!(tail < hit * 0.25, "pulse did not release ({tail} vs {hit})");
+    }
+
+    #[test]
+    fn synced_shake_is_strongest_right_after_the_beat() {
+        let src = test_image();
+        let mut e = find_effect("organic_shake").unwrap().instance();
+        set(&mut e, "preset", ParamValue::Choice(5)); // Earthquake
+        set(&mut e, "sync", ParamValue::Choice(1));
+        set(&mut e, "bpm", ParamValue::Float(60.0));
+        set(&mut e, "motion_blur", ParamValue::Float(0.0));
+        set(&mut e, "auto_scale", ParamValue::Bool(false));
+        let mut avg = [0.0f32; 2];
+        for b in 0..8 {
+            for (i, dt) in [0.05, 0.9].iter().enumerate() {
+                let mut img = src.clone();
+                organic_shake(&mut img, &e, &cx_at(b as f64 + dt));
+                avg[i] += diff(&img, &src);
+            }
+        }
+        assert!(avg[0] > avg[1] * 2.0, "shake should die away between beats: {avg:?}");
     }
 
     #[test]

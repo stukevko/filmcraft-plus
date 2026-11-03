@@ -1,0 +1,85 @@
+# FilmCraft Plus
+
+Eine angepasste Version von [FilmCraft](https://github.com/storytold/filmcraft) mit drei neuen
+Effekten und einem Build für **Intel Core Ultra 7 270K Plus + NVIDIA RTX 2080** unter Windows 11.
+
+## Installieren
+
+1. Auf GitHub unter **Releases ▸ plus-latest** die Datei `FilmCraft-Plus-windows-x64.zip` laden.
+2. Entpacken, `FilmCraft Plus.exe` starten. Windows SmartScreen fragt beim ersten Start nach
+   („Weitere Informationen ▸ Trotzdem ausführen“), weil der Build nicht signiert ist.
+3. Sprache: **Bearbeiten ▸ Sprache ▸ Deutsch** (falls nicht automatisch).
+
+## Die neuen Effekte
+
+Alle drei liegen im Effekte-Fenster ganz oben im Ordner **FilmCraft Plus**. Effekt auf einen
+Clip ziehen (oder Clip markieren und doppelklicken), dann in den **Effekteinstellungen** eine
+**Vorgabe** wählen. Fertig – mehr ist nicht nötig. Ein Regler (**Intensität / Stärke**) macht den
+Effekt schwächer oder stärker; alle Regler lassen sich wie gewohnt mit Keyframes animieren.
+
+### Organisches Wackeln (Organic Shake)
+
+Natürliches Kamerawackeln mit Bewegungsunschärfe, Z-Wackeln (Zoom) und Drehung. Die Ränder
+werden automatisch verdeckt („Ränder verbergen“), damit nie schwarze Kanten zu sehen sind.
+
+| Vorgabe | Wofür |
+|---|---|
+| Handkamera | ruhige Handheld-Optik, Interviews, Vlogs |
+| Gehen / Laufen | Kamera läuft mit |
+| Autofahrt | feines, schnelles Rütteln |
+| Erdbeben | heftiges Dauerbeben |
+| Einschlag | harter Stoß, der in 1–2 s abklingt – an den Moment des Treffers legen |
+| Drohnen-Drift | langsames Schweben |
+| Herzschlag | pulsierender Zoom im Takt |
+
+„Eigene“ schaltet die Regler unter **Eigenes Wackeln** frei. **Geschwindigkeit** macht jede
+Vorgabe schneller/langsamer. **Abklingzeit** > 0 lässt das Wackeln ab Clip-Anfang ausklingen.
+
+### Flacker-Stapel (Flicker Stack)
+
+Rhythmische Zuckungen von Unschärfe, Farbe, Licht, Skalierung, Verschieben, Farbversatz und
+Zeit – ideal für Musikvideos, Trailer, Übergänge und Glitch-Momente.
+
+| Vorgabe | Wofür |
+|---|---|
+| Dezent | leichtes Leben im Bild |
+| Musikvideo | alles an, im Beat-Tempo |
+| Glitch-Treffer | schnelle digitale Störungen mit Zeitsprüngen |
+| Horror | Lichtblitze, Ruckler, Zeitsprünge |
+| Stroboskop | reines Lichtflackern |
+| Verträumt | weiche Blur- und Licht-Pulse |
+
+Tipp: **Stärke** auf 0 % stellen und nur auf den Beat Keyframes auf 100 % setzen – so zuckt
+das Bild genau dort. **Flackern pro Sekunde** = BPM ÷ 60 (z. B. 120 BPM → 2 oder 4).
+
+### Look-Baukasten (Look Builder)
+
+Fertige Kino-Looks per Klick, aufgebaut wie beim Coloristen: **Motiv** (Hautglättung) ▸
+**Farbe** (Belichtung, Weißabgleich, Kontrast, Sättigung, Schatten-/Lichtertönung) ▸ **Matt**
+(Fade, Lichter-Abrollen) ▸ **Objektiv** (Diffusion, Halation, Vignette) ▸ **Film** (Korn).
+
+Looks: Petrol & Orange, Warmer Film, Kalter Thriller, Bleach Bypass, Vintage 70er,
+Pastelltraum, Noir, Neonnacht, Goldene Stunde, Grüner Code, Verblasst matt, Kino-Kontrast.
+
+**Stärke** blendet den Look stufenlos ein. Für einen eigenen Look „Eigene“ wählen und die
+Regler der fünf Gruppen nutzen. Hautglättung wirkt auch zusätzlich zu einem fertigen Look.
+
+## Optimierungen für deinen PC
+
+- **CPU:** Der Build ist für Arrow Lake-S kompiliert (`target-cpu=arrowlake-s`: AVX2, FMA,
+  AVX-VNNI) und nutzt alle Kerne (P- und E-Kerne) für Effekte und Decoding.
+  Hinweis: Diese .exe läuft nur auf ähnlich modernen Intel/AMD-CPUs.
+- **GPU:** FilmCraft zeichnet jetzt standardmäßig auf der **RTX 2080** statt auf der
+  Intel-Grafik der CPU (anders wählen: Umgebungsvariable `WGPU_POWER_PREF=low`).
+- **Decoding:** H.264/HEVC laufen über die Hardware (Media Foundation / NVDEC).
+- **Export:** „Hardware-Encoder verwenden“ ist standardmäßig an → **NVENC** für H.264/HEVC
+  (die RTX 2080 kann kein AV1-Encoding). Passt eine Einstellung nicht, nimmt FilmCraft
+  automatisch den Software-Encoder.
+- In den Wiedergabe-Einstellungen des Programmmonitors bei 4K ruhig **Voll** wählen; bei sehr
+  vielen Effekten **1/2** für flüssige Vorschau, der Export rendert immer in voller Qualität.
+
+## Rechtliches
+
+Die Effekte, Vorgaben und Looks sind eigene Arbeit dieses Forks. Sie sind von der *Art* von
+Werkzeugen bekannter Plugins inspiriert, enthalten aber keinen fremden Code, keine fremden
+Presets oder LUTs und tragen bewusst eigene Namen. Lizenz wie FilmCraft: MIT oder Apache-2.0.

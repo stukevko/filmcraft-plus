@@ -87,6 +87,9 @@ pub fn register() -> Availability {
     #[cfg(target_os = "windows")]
     {
         filmcraft_export::register_format_probe(filmcraft_export::Format::Hevc, nvenc::hevc_available);
+        // FilmCraft Plus: AMD (VCN) and Intel (Quick Sync) GPUs write H.265 through Media Foundation
+        filmcraft_export::register_format_probe(filmcraft_export::Format::Hevc, media_foundation::encode::hevc_available);
+        media_foundation::encode::warm_hevc_probe();
         // HDR sequences export as HEVC Main 10 (PQ / HLG) only where NVENC has a 10-bit encoder; elsewhere
         // (and on macOS, whose VideoToolbox path is 8-bit) they are tone-mapped to SDR, as before
         filmcraft_export::register_hdr_probe(filmcraft_export::Format::Hevc, nvenc::hevc_hdr_available);
@@ -96,8 +99,12 @@ pub fn register() -> Availability {
     {
         static ENCODERS: std::sync::Once = std::sync::Once::new();
         // Export ▸ Hardware encoding (NVENC H.264): in front of the software encoder, taking an
-        // export only when asked for and when NVENC can do it
-        ENCODERS.call_once(|| filmcraft_export::register_encoder(nvenc::export::factory));
+        // export only when asked for and when NVENC can do it. Factories registered later are asked first,
+        // so the Media Foundation GPU encoder (AMD / Intel, FilmCraft Plus) goes in behind NVENC.
+        ENCODERS.call_once(|| {
+            filmcraft_export::register_encoder(media_foundation::encode::factory);
+            filmcraft_export::register_encoder(nvenc::export::factory);
+        });
         filmcraft_codecs::register_video_decoder(media_foundation_factory);
         filmcraft_codecs::hw::set_hw_backend("Media Foundation");
         Availability::Available("Media Foundation")

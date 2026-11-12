@@ -23,9 +23,11 @@
 //! The readback (`gpu::Readback`, [`crate::biplanar`]) is the one GPU to CPU copy; a later
 //! zero-copy path would hand the texture to the renderer instead and keep everything else.
 //!
-//! The modules that call into Windows (`gpu`, `mft`) are the FFI modules of this backend
+//! The modules that call into Windows (`gpu`, `mft`, `encode`) are the FFI modules of this backend
 //! (docs/adr/0001-platform-ffi.md); this one is safe code.
 
+#[allow(unsafe_code)]
+pub mod encode;
 #[allow(unsafe_code)]
 mod gpu;
 #[allow(unsafe_code)]

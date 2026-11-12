@@ -1,6 +1,6 @@
 # FilmCraft Plus (personal fork): builds a Windows x64 release tuned for an Intel Core Ultra 7
-# 270K Plus (Arrow Lake-S: AVX2, FMA, AVX-VNNI) with an NVIDIA RTX 2080 (NVDEC / NVENC, D3D12 /
-# Vulkan). Not part of upstream CI: the upstream release workflow needs signing secrets this fork
+# 270K Plus (Arrow Lake-S: AVX2, FMA, AVX-VNNI) with an AMD Radeon RX 5700 (VCN 2.0 encoding via
+# Media Foundation, DXVA decoding, D3D12 / Vulkan); NVIDIA (NVENC) and Intel Quick Sync work too. Not part of upstream CI: the upstream release workflow needs signing secrets this fork
 # does not have, so the build here is unsigned.
 #
 # Download: Actions ▸ "FilmCraft Plus Windows build" ▸ latest run ▸ Artifacts, or the
@@ -41,6 +41,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: plus-arrowlake
+      - name: Check the GPU encoder (lint + unit tests, plain x86-64 so they run on the runner)
+        env:
+          RUSTFLAGS: ""
+          CARGO_TARGET_DIR: target/check
+        run: |
+          cargo clippy --locked -p filmcraft-platform --all-targets --target x86_64-pc-windows-msvc -- -D warnings
+          cargo test --locked -p filmcraft-platform --lib --target x86_64-pc-windows-msvc media_foundation::encode
       - name: Build
         run: cargo build --release --locked -p filmcraft --features whisper --target x86_64-pc-windows-msvc
       - name: Package

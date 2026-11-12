@@ -3760,9 +3760,9 @@
 	Accent First Beat of Bar	Ersten Beat im Takt betonen
 	Add Beat Markers from Music	Beat-Marker aus Musik setzen
 	Sync Plus Effects to Music	Plus-Effekte mit Musik synchronisieren
-	YouTube 1080p – Plus (RTX, −14 LUFS)	YouTube 1080p – Plus (RTX, −14 LUFS)
-	YouTube 4K – Plus (RTX HEVC, −14 LUFS)	YouTube 4K – Plus (RTX HEVC, −14 LUFS)
-	YouTube Shorts – Plus (RTX, −14 LUFS)	YouTube Shorts – Plus (RTX, −14 LUFS)
-	H.264 1920×1080 on the GPU encoder (NVENC), VBR 24 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS	H.264 1920×1080 über den GPU-Encoder (NVENC), VBR 24 Mbit/s, AAC 320 kbit/s, Lautheit auf −14 LUFS normalisiert
-	H.265 3840×2160 on the GPU encoder (NVENC), VBR 60 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS	H.265 3840×2160 über den GPU-Encoder (NVENC), VBR 60 Mbit/s, AAC 320 kbit/s, Lautheit auf −14 LUFS normalisiert
-	H.264 1080×1920 portrait on the GPU encoder (NVENC), scaled to fill, VBR 16 Mbps, loudness normalized to −14 LUFS	H.264 1080×1920 Hochformat über den GPU-Encoder (NVENC), füllend skaliert, VBR 16 Mbit/s, Lautheit auf −14 LUFS normalisiert
+	YouTube 1080p – Plus (GPU, −14 LUFS)	YouTube 1080p – Plus (GPU, −14 LUFS)
+	YouTube 4K – Plus (GPU HEVC, −14 LUFS)	YouTube 4K – Plus (GPU HEVC, −14 LUFS)
+	YouTube Shorts – Plus (GPU, −14 LUFS)	YouTube Shorts – Plus (GPU, −14 LUFS)
+	H.264 1920×1080 on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), VBR 24 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS	H.264 1920×1080 über den GPU-Encoder (AMD VCN, NVIDIA NVENC oder Intel Quick Sync), VBR 24 Mbit/s, AAC 320 kbit/s, Lautheit auf −14 LUFS normalisiert
+	H.265 3840×2160 on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), VBR 60 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS	H.265 3840×2160 über den GPU-Encoder (AMD VCN, NVIDIA NVENC oder Intel Quick Sync), VBR 60 Mbit/s, AAC 320 kbit/s, Lautheit auf −14 LUFS normalisiert
+	H.264 1080×1920 portrait on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), scaled to fill, VBR 16 Mbps, loudness normalized to −14 LUFS	H.264 1080×1920 Hochformat über den GPU-Encoder (AMD VCN, NVIDIA NVENC oder Intel Quick Sync), füllend skaliert, VBR 16 Mbit/s, Lautheit auf −14 LUFS normalisiert

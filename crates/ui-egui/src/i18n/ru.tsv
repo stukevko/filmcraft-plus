@@ -3689,7 +3689,7 @@
 	Exported {path} as {format}, from its file extension	Экспортировано {path} как {format}, по расширению файла
 	FilmCraft Updates	Обновления FilmCraft
 	FilmCraft {version} is currently the newest version available.	FilmCraft {version} — самая новая доступная версия.
-	H.265 (HEVC) needs a hardware encoder (NVENC on NVIDIA GPUs, VideoToolbox on macOS); none was found on this machine, and FilmCraft has no software H.265 encoder yet. Choose H.264 or ProRes instead.	Для H.265 (HEVC) требуется аппаратный кодировщик (NVENC на GPU NVIDIA, VideoToolbox на macOS); на этом компьютере он не найден, а программного кодировщика H.265 в FilmCraft пока нет. Вместо него выберите H.264 или ProRes.
+	H.265 (HEVC) needs a hardware encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync on Windows, VideoToolbox on macOS); none was found on this machine, and FilmCraft has no software H.265 encoder yet. Choose H.264 or ProRes instead.	Для H.265 (HEVC) требуется аппаратный кодировщик (NVENC на GPU NVIDIA, VideoToolbox на macOS); на этом компьютере он не найден, а программного кодировщика H.265 в FilmCraft пока нет. Вместо него выберите H.264 или ProRes.
 	In:	Вход:
 	Invalid duration: {error}	Недопустимая длительность: {error}
 	Keep Existing Settings	Сохранить существующие параметры

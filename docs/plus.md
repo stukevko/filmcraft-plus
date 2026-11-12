@@ -1,7 +1,8 @@
 # FilmCraft Plus
 
 Eine angepasste Version von [FilmCraft](https://github.com/storytold/filmcraft) mit drei neuen
-Effekten und einem Build für **Intel Core Ultra 7 270K Plus + NVIDIA RTX 2080** unter Windows 11.
+Effekten und einem Build für **Intel Core Ultra 7 270K Plus + AMD Radeon RX 5700** unter Windows 11
+(NVIDIA- und Intel-Grafik funktionieren genauso).
 
 ## Installieren
 
@@ -95,11 +96,11 @@ betont. Ohne Sync hält der Effekt den vollen Puls – dann per Keyframes auf **
 
 Im Export unter **Vorgaben ▸ FilmCraft Plus**:
 
-- **YouTube 1080p – Plus (RTX, −14 LUFS)**: H.264, 24 Mbit/s
-- **YouTube 4K – Plus (RTX HEVC, −14 LUFS)**: H.265 über die RTX 2080, 60 Mbit/s
-- **YouTube Shorts – Plus (RTX, −14 LUFS)**: 1080×1920 Hochformat
+- **YouTube 1080p – Plus (GPU, −14 LUFS)**: H.264, 24 Mbit/s
+- **YouTube 4K – Plus (GPU HEVC, −14 LUFS)**: H.265 über die RX 5700, 60 Mbit/s
+- **YouTube Shorts – Plus (GPU, −14 LUFS)**: 1080×1920 Hochformat
 
-Alle laufen über NVENC und normalisieren den Ton auf **−14 LUFS** (true peak −1 dBTP). Das ist
+Alle laufen über den Hardware-Encoder der Grafikkarte und normalisieren den Ton auf **−14 LUFS** (true peak −1 dBTP). Das ist
 der Pegel, auf den YouTube regelt – dein Video wird also nicht leiser gedreht.
 
 ### Automatische Untertitel
@@ -115,12 +116,17 @@ auch Text-basiert schneiden, Pausen und Füllwörter („äh“, „ähm“) ent
 - **CPU:** Der Build ist für Arrow Lake-S kompiliert (`target-cpu=arrowlake-s`: AVX2, FMA,
   AVX-VNNI) und nutzt alle Kerne (P- und E-Kerne) für Effekte und Decoding.
   Hinweis: Diese .exe läuft nur auf ähnlich modernen Intel/AMD-CPUs.
-- **GPU:** FilmCraft zeichnet jetzt standardmäßig auf der **RTX 2080** statt auf der
-  Intel-Grafik der CPU (anders wählen: Umgebungsvariable `WGPU_POWER_PREF=low`).
-- **Decoding:** H.264/HEVC laufen über die Hardware (Media Foundation / NVDEC).
-- **Export:** „Hardware-Encoder verwenden“ ist standardmäßig an → **NVENC** für H.264/HEVC
-  (die RTX 2080 kann kein AV1-Encoding). Passt eine Einstellung nicht, nimmt FilmCraft
-  automatisch den Software-Encoder.
+- **GPU:** FilmCraft zeichnet Vorschau und Effekte auf der **RX 5700** (DirectX 12 / Vulkan)
+  statt auf der Intel-Grafik der CPU (anders wählen: Umgebungsvariable `WGPU_POWER_PREF=low`).
+- **Decoding:** H.264/HEVC laufen über die Hardware der RX 5700 (Media Foundation / DXVA).
+- **Export:** „Hardware-Encoder verwenden“ ist standardmäßig an. Auf der RX 5700 exportiert
+  FilmCraft Plus H.264 und H.265 über **AMD VCN** (Media Foundation), auf NVIDIA-Karten über
+  NVENC, ohne Grafikkarte über Intel Quick Sync. Passt eine Einstellung nicht (z. B. zwei
+  Durchgänge, CRF, HDR), nimmt FilmCraft für H.264 automatisch den Software-Encoder.
+  - Gibt es zwei Encoder (RX 5700 **und** Intel-Grafik), wird AMD bevorzugt. Lieber Intel Quick
+    Sync? Umgebungsvariable `FILMCRAFT_HW_ENCODER=Intel` setzen.
+  - Die RX 5700 kann kein AV1-Encoding und kein 10-Bit/HDR beim Export; HDR wird für H.265
+    automatisch in SDR umgewandelt.
 - In den Wiedergabe-Einstellungen des Programmmonitors bei 4K ruhig **Voll** wählen; bei sehr
   vielen Effekten **1/2** für flüssige Vorschau, der Export rendert immer in voller Qualität.
 

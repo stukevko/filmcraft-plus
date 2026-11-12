@@ -52,8 +52,8 @@ pub const SHORT_FORM_LUFS: f64 = -14.0;
 /// True-peak ceiling of the short-form presets, headroom for the platforms' own AAC encode.
 pub const SHORT_FORM_PEAK_DBTP: f64 = -1.0;
 
-/// FilmCraft Plus: YouTube delivery on the GPU encoder (NVENC, falls back to software where the
-/// format allows it), loudness normalized to the platforms' −14 LUFS.
+/// FilmCraft Plus: YouTube delivery on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync;
+/// H.264 falls back to software where the GPU declines), loudness normalized to the platforms' −14 LUFS.
 fn plus_youtube(format: Format, size: (u32, u32), kbps: u32, max_kbps: u32) -> ExportSettings {
     let loudness = LoudnessNormalization { enabled: true, target_lufs: SHORT_FORM_LUFS, true_peak_dbtp: SHORT_FORM_PEAK_DBTP };
     ExportSettings {
@@ -156,21 +156,21 @@ pub fn builtin_presets() -> Vec<ExportPreset> {
             short_form(12_000, 16_000),
         ),
         p(
-            "YouTube 1080p – Plus (RTX, −14 LUFS)",
+            "YouTube 1080p – Plus (GPU, −14 LUFS)",
             "FilmCraft Plus",
-            "H.264 1920×1080 on the GPU encoder (NVENC), VBR 24 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS",
+            "H.264 1920×1080 on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), VBR 24 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS",
             plus_youtube(Format::H264, (1920, 1080), 24_000, 30_000),
         ),
         p(
-            "YouTube 4K – Plus (RTX HEVC, −14 LUFS)",
+            "YouTube 4K – Plus (GPU HEVC, −14 LUFS)",
             "FilmCraft Plus",
-            "H.265 3840×2160 on the GPU encoder (NVENC), VBR 60 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS",
+            "H.265 3840×2160 on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), VBR 60 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS",
             plus_youtube(Format::Hevc, (3840, 2160), 60_000, 80_000),
         ),
         p(
-            "YouTube Shorts – Plus (RTX, −14 LUFS)",
+            "YouTube Shorts – Plus (GPU, −14 LUFS)",
             "FilmCraft Plus",
-            "H.264 1080×1920 portrait on the GPU encoder (NVENC), scaled to fill, VBR 16 Mbps, loudness normalized to −14 LUFS",
+            "H.264 1080×1920 portrait on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), scaled to fill, VBR 16 Mbps, loudness normalized to −14 LUFS",
             ExportSettings { scaling: Scaling::ScaleToFill, ..plus_youtube(Format::H264, (1080, 1920), 16_000, 20_000) },
         ),
         p("Apple ProRes 422 HQ", bc, "QuickTime, ProRes 422 HQ, 24-bit 48 kHz PCM", mov(Format::ProRes, "hq")),

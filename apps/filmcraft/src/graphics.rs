@@ -440,7 +440,7 @@ fn apply_for(options: &mut NativeOptions, mode: Mode, backend_override: Option<B
     // the check back on.
     create.instance_descriptor.flags = create.instance_descriptor.flags.difference(wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL).with_env();
     // FilmCraft Plus: on a desktop with an integrated GPU next to a discrete one (Intel Core
-    // Ultra + GeForce RTX), draw on the discrete card unless `WGPU_POWER_PREF` says otherwise.
+    // Ultra + Radeon / GeForce), draw on the discrete card unless `WGPU_POWER_PREF` says otherwise.
     if std::env::var_os("WGPU_POWER_PREF").is_none() {
         create.power_preference = wgpu::PowerPreference::HighPerformance;
     }

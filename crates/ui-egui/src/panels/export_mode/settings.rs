@@ -58,7 +58,7 @@ fn unavailable_why(format: Format) -> Option<&'static str> {
     }
     Some(match format {
         Format::Hevc => tl!(
-            "H.265 (HEVC) needs a hardware encoder (NVENC on NVIDIA GPUs, VideoToolbox on macOS); none was found on this machine, and FilmCraft has no software H.265 encoder yet. Choose H.264 or ProRes instead."
+            "H.265 (HEVC) needs a hardware encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync on Windows, VideoToolbox on macOS); none was found on this machine, and FilmCraft has no software H.265 encoder yet. Choose H.264 or ProRes instead."
         ),
         Format::Av1 => tl!("AV1 needs a hardware encoder; none was found on this machine, and FilmCraft has no software AV1 encoder yet."),
         _ => tl!("Not supported by FilmCraft's encoders yet"),

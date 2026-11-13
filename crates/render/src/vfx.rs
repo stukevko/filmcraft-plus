@@ -16,6 +16,8 @@ pub(crate) use blur::bokeh;
 pub use blur::{KERNEL_REACH, bokeh_kernel};
 mod color;
 pub(crate) use color::cdl;
+mod avko;
+mod beat;
 mod distort;
 mod immersive;
 mod lights;
@@ -63,6 +65,21 @@ pub trait FxEnv: Sync {
     fn source_size(&self) -> (u32, u32);
     /// Identity of the clip and its source range (cache key for analyses).
     fn clip_key(&self) -> u64;
+    /// FilmCraft Plus: `seconds` of mono sequence audio ending `dt` seconds from now. `track` =
+    /// `None` for the master mix, `Some(i)` for audio track i (0 = A1) alone. `None` when there is
+    /// no audio here (the default).
+    fn audio(&self, _dt: f64, _seconds: f64, _track: Option<usize>) -> Option<AudioWindow> {
+        None
+    }
+}
+
+/// Mono audio for the audio-reactive effects ([`FxEnv::audio`]).
+#[derive(Clone, Debug, Default)]
+pub struct AudioWindow {
+    pub samples: Vec<f32>,
+    pub sample_rate: u32,
+    /// Absolute sample position (sequence time × rate) just after the last sample.
+    pub end: i64,
 }
 
 /// The environment of a track item being rendered by [`crate::item_layer`].
@@ -93,6 +110,28 @@ pub fn is_temporal(id: &str) -> bool {
 }
 
 impl FxEnv for ItemEnv<'_> {
+    fn audio(&self, dt: f64, seconds: f64, track: Option<usize>) -> Option<AudioWindow> {
+        let sr = self.seq.settings.sample_rate.clamp(8_000, 384_000);
+        let frames = (seconds.clamp(0.0, 4.0) * f64::from(sr)) as usize;
+        let end = (self.t.seconds() + dt) * f64::from(sr);
+        if frames == 0 || !end.is_finite() {
+            return None;
+        }
+        let end = end.round().clamp(-9e15, 9e15) as i64;
+        let start = end.saturating_sub(frames as i64);
+        let buf = match track {
+            None => crate::audio::mix_sequence(self.project, self.seq, start, frames, self.sources),
+            Some(i) => crate::audio::track_input(self.project, self.seq.audio_tracks.get(i)?, start, frames, sr, self.sources),
+        };
+        let n = buf.channels.len();
+        if n == 0 {
+            return None;
+        }
+        let inv = 1.0 / n as f32;
+        let samples = (0..buf.frames()).map(|i| buf.channels.iter().map(|c| c.get(i).copied().unwrap_or(0.0)).sum::<f32>() * inv).collect();
+        Some(AudioWindow { samples, sample_rate: sr, end })
+    }
+
     fn frame(&self, dt: f64, upto: &EffectInstance) -> Option<Image> {
         let t2 = self.t + Tick::from_seconds_f64(dt);
         let base = crate::base_layer(self.project, self.seq, self.item, t2, self.opts, self.sources, self.want)?;
@@ -533,6 +572,7 @@ pub fn apply(img: &mut Image, e: &EffectInstance, cx: &FxCtx) -> bool {
         "flicker_stack" => plus::flicker_stack(img, e, cx),
         "look_builder" => plus::look_builder(img, e, cx),
         "beat_pulse" => plus::beat_pulse(img, e, cx),
+        "avko_spectrum" => avko::avko_spectrum(img, e, cx),
         id if id.starts_with("vr_") => immersive::apply(img, e, cx),
         _ => return false,
     }

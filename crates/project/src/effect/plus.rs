@@ -25,7 +25,12 @@ const MUSIC: &[&str] = &[PLUS_TOP, "Music"];
 
 /// Music Sync: what the effect locks to. `Markers ▸ Sync Plus Effects to Music` fills in the
 /// tempo and the first beat from the selected music clip.
-pub const SYNC_MODES: &[&str] = &["Off", "Every Beat", "Every 2 Beats", "Every Bar (4 Beats)", "Half Beats"];
+/// "Kick (Audio)" and "Snare (Audio)" listen to the sequence mix instead of a tempo.
+pub const SYNC_MODES: &[&str] = &["Off", "Every Beat", "Every 2 Beats", "Every Bar (4 Beats)", "Half Beats", "Kick (Audio)", "Snare (Audio)"];
+/// Index of "Kick (Audio)" in [`SYNC_MODES`] ("Snare (Audio)" is the next one).
+pub const SYNC_KICK: u32 = 5;
+/// AVKO Spectrum: which audio it listens to.
+pub const AUDIO_SOURCES: &[&str] = &["Master Mix", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8"];
 /// Beat Pulse presets (index 0 = Custom).
 pub const PULSE_PRESETS: &[&str] = &["Custom", "Bass Punch", "Flash", "Glow Hit", "RGB Kick", "Zoom Bounce", "Shake Hit"];
 
@@ -192,8 +197,54 @@ fn beat_pulse() -> EffectDef {
 /// The Plus effects that follow the music (they carry the Music Sync group).
 pub const MUSIC_SYNCED: &[&str] = &["organic_shake", "flicker_stack", "beat_pulse"];
 
+/// AVKO Spectrum: an audio spectrum of "Plattenbau" towers (each band a tower of window blocks,
+/// antennas as falling peaks, a street underneath), weighted to sub, kick and snare, which also
+/// shakes the whole picture on every kick and twitches it on every snare. Made for AVKO's logo.
+fn avko_spectrum() -> EffectDef {
+    const LAY: &str = "Layout";
+    const RESP: &str = "Response";
+    const LOOK: &str = "Look";
+    const HITS: &str = "Kick & Snare";
+    video(
+        "avko_spectrum",
+        "AVKO Spectrum",
+        MUSIC,
+        vec![
+            ch("source", "Audio Source", AUDIO_SOURCES, 0),
+            b("on_original", "Composite on Original", true),
+            grp(fs("towers", "Towers", 20.0, (4.0, 96.0), (6.0, 48.0), "", 0), LAY),
+            grp(fs("floors", "Max Floors", 7.0, (2.0, 40.0), (3.0, 20.0), "", 0), LAY),
+            grp(fs("center_x", "Center X", 50.0, (-50.0, 150.0), (0.0, 100.0), "%", 1), LAY),
+            grp(fs("baseline", "Street Height", 80.0, (0.0, 100.0), (20.0, 100.0), "%", 1), LAY),
+            grp(fs("width", "Width", 76.0, (5.0, 200.0), (20.0, 100.0), "%", 1), LAY),
+            grp(fs("gap", "Block Gap", 10.0, (0.0, 60.0), (0.0, 40.0), "%", 1), LAY),
+            grp(fs("fmin", "Lowest Frequency", 30.0, (15.0, 2000.0), (20.0, 200.0), "Hz", 0), RESP),
+            grp(fs("fmax", "Highest Frequency", 12000.0, (500.0, 22000.0), (2000.0, 20000.0), "Hz", 0), RESP),
+            grp(fs("sensitivity", "Sensitivity", 100.0, (10.0, 1000.0), (25.0, 400.0), "%", 1), RESP),
+            grp(pct("melody", "Melody Response", 35.0), RESP),
+            grp(fs("release", "Fall Time", 0.18, (0.02, 2.0), (0.05, 0.8), "s", 2), RESP),
+            grp(b("antennas", "Antennas (Peaks)", true), RESP),
+            grp(fs("hold", "Antenna Hold", 0.25, (0.0, 3.0), (0.0, 1.0), "s", 2), RESP),
+            grp(col("color", "Building Color", [0.88, 0.88, 0.88, 1.0]), LOOK),
+            grp(pct("grunge", "Grunge", 50.0), LOOK),
+            grp(pct("glow", "Glow", 15.0), LOOK),
+            grp(b("street", "Street", true), LOOK),
+            grp(fs("street_speed", "Street Speed", 1.0, (-20.0, 20.0), (-4.0, 4.0), "", 2), LOOK),
+            grp(pct("lights", "Window Lights on Kick", 0.0), LOOK),
+            grp(col("light_color", "Window Light Color", [1.0, 0.78, 0.35, 1.0]), LOOK),
+            grp(fs("kick_shake", "Kick Shake", 60.0, (0.0, 500.0), (0.0, 200.0), "%", 1), HITS),
+            grp(fs("kick_boost", "Kick Jump", 60.0, (0.0, 300.0), (0.0, 150.0), "%", 1), HITS),
+            grp(fs("snare_twitch", "Snare Twitch", 50.0, (0.0, 500.0), (0.0, 200.0), "%", 1), HITS),
+            grp(fs("snare_boost", "Snare Jump", 45.0, (0.0, 300.0), (0.0, 150.0), "%", 1), HITS),
+            grp(fs("hit_decay", "Hit Length", 0.2, (0.03, 1.5), (0.05, 0.6), "s", 2), HITS),
+            grp(fs("hit_sens", "Hit Sensitivity", 100.0, (25.0, 400.0), (25.0, 300.0), "%", 1), HITS),
+            seed(),
+        ],
+    )
+}
+
 pub(super) fn defs() -> Vec<EffectDef> {
-    let mut v = vec![organic_shake(), flicker_stack(), look_builder(), beat_pulse()];
+    let mut v = vec![organic_shake(), flicker_stack(), look_builder(), beat_pulse(), avko_spectrum()];
     for d in &mut v {
         d.accelerated = false;
         d.float32 = true;
@@ -208,7 +259,7 @@ mod tests {
 
     #[test]
     fn plus_effects_are_registered_in_their_folder() {
-        for id in ["organic_shake", "flicker_stack", "look_builder", "beat_pulse"] {
+        for id in ["organic_shake", "flicker_stack", "look_builder", "beat_pulse", "avko_spectrum"] {
             let d = find_effect(id).unwrap_or_else(|| panic!("missing {id}"));
             assert_eq!(d.category.first(), Some(&super::PLUS_TOP), "{id}");
             // every parameter id is unique

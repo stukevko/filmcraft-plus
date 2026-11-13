@@ -3766,3 +3766,41 @@
 	H.264 1920×1080 on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), VBR 24 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS	H.264 1920×1080 über den GPU-Encoder (AMD VCN, NVIDIA NVENC oder Intel Quick Sync), VBR 24 Mbit/s, AAC 320 kbit/s, Lautheit auf −14 LUFS normalisiert
 	H.265 3840×2160 on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), VBR 60 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS	H.265 3840×2160 über den GPU-Encoder (AMD VCN, NVIDIA NVENC oder Intel Quick Sync), VBR 60 Mbit/s, AAC 320 kbit/s, Lautheit auf −14 LUFS normalisiert
 	H.264 1080×1920 portrait on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), scaled to fill, VBR 16 Mbps, loudness normalized to −14 LUFS	H.264 1080×1920 Hochformat über den GPU-Encoder (AMD VCN, NVIDIA NVENC oder Intel Quick Sync), füllend skaliert, VBR 16 Mbit/s, Lautheit auf −14 LUFS normalisiert
+	AVKO Spectrum	AVKO-Spektrum
+	Audio Source	Audioquelle
+	Master Mix	Gesamtmix
+	Layout	Anordnung
+	Response	Reaktion
+	Kick & Snare	Kick & Snare
+	Towers	Hochhäuser
+	Max Floors	Max. Stockwerke
+	Center X	Mitte X
+	Street Height	Straßenhöhe
+	Block Gap	Blockabstand
+	Lowest Frequency	Tiefste Frequenz
+	Highest Frequency	Höchste Frequenz
+	Melody Response	Reaktion auf Melodie
+	Fall Time	Fallzeit
+	Antennas (Peaks)	Antennen (Spitzen)
+	Antenna Hold	Antennen halten
+	Building Color	Gebäudefarbe
+	Street	Straße
+	Street Speed	Straßentempo
+	Window Lights on Kick	Fensterlicht bei Kick
+	Window Light Color	Fensterlicht-Farbe
+	Kick Shake	Kick-Wackeln
+	Kick Jump	Kick-Sprung
+	Snare Twitch	Snare-Zucken
+	Snare Jump	Snare-Sprung
+	Hit Length	Treffer-Länge
+	Hit Sensitivity	Treffer-Empfindlichkeit
+	Kick (Audio)	Kick (Audio)
+	Snare (Audio)	Snare (Audio)
+	A1	A1
+	A2	A2
+	A3	A3
+	A4	A4
+	A5	A5
+	A6	A6
+	A7	A7
+	A8	A8

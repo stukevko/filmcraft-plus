@@ -16,18 +16,18 @@ use super::{FxCtx, Image, add_light, blend_simple, bv, chv, cv, dec, enc, fv, ha
 use crate::effects::gaussian;
 
 /// Layer pixels per "HD pixel" (the unit of every pixel-sized Plus parameter).
-fn hd(img: &Image) -> f64 {
+pub(super) fn hd(img: &Image) -> f64 {
     (img.w as f64 / 1920.0).max(1e-3)
 }
 
-fn seed_of(e: &EffectInstance, cx: &FxCtx) -> u64 {
+pub(super) fn seed_of(e: &EffectInstance, cx: &FxCtx) -> u64 {
     let s = fv(e, "seed", cx);
     if s.is_finite() && s > 0.0 { s as u64 } else { 0 }
 }
 
 /// A gaussian blur that runs on a reduced copy for big radii (diffusion, glows): the result is
 /// visually identical at those sizes and many times faster on 4K frames.
-fn soft_blur(img: &Image, sigma: f32) -> Image {
+pub(super) fn soft_blur(img: &Image, sigma: f32) -> Image {
     if !(sigma.is_finite()) || sigma <= 0.3 {
         return img.clone();
     }
@@ -62,7 +62,7 @@ fn hsv(h: f32, s: f32, v: f32) -> [f32; 3] {
 }
 
 /// Horizontal red / blue shift by `d` layer pixels (green stays).
-fn rgb_shift(img: &mut Image, d: f32) {
+pub(super) fn rgb_shift(img: &mut Image, d: f32) {
     if !d.is_finite() || d.abs() <= 0.2 {
         return;
     }
@@ -93,12 +93,29 @@ struct BeatClock {
     interval: f64,
     /// Beats per sync interval (so `index` can be turned back into a beat number).
     beats_per: f64,
+    /// Kick (Audio) / Snare (Audio): driven by drum hits in the mix, not by a tempo.
+    audio: bool,
+    /// Hit strength 0..1 (1 for tempo sync).
+    strength: f64,
+}
+
+/// The kick and snare hits at this frame in `track` (`None` = master mix).
+pub(super) fn drum_hits(cx: &FxCtx, track: Option<usize>, sens: f32) -> (Option<super::beat::Hit>, Option<super::beat::Hit>) {
+    let Some(w) = cx.env.and_then(|env| env.audio(0.0, super::beat::WINDOW, track)) else { return (None, None) };
+    super::beat::hits(&w.samples, w.sample_rate, w.end, sens)
 }
 
 fn beat_clock(e: &EffectInstance, cx: &FxCtx) -> Option<BeatClock> {
     let mode = chv(e, "sync");
     if mode == 0 {
         return None;
+    }
+    if mode >= filmcraft_project::effect::SYNC_KICK {
+        let (kick, snare) = drum_hits(cx, None, 1.0);
+        let hit = if mode == filmcraft_project::effect::SYNC_KICK { kick } else { snare };
+        // no hit in the last second: far past the last one, so everything is at rest
+        let (index, since, strength) = hit.map_or((i64::MIN / 2, 10.0, 0.0), |h| (h.index, h.age, f64::from(h.strength)));
+        return Some(BeatClock { index, since, interval: 0.5, beats_per: 2.0, audio: true, strength });
     }
     let bpm = fv(e, "bpm", cx) as f64;
     let bpm = if bpm.is_finite() { bpm.clamp(20.0, 400.0) } else { 120.0 };
@@ -118,7 +135,7 @@ fn beat_clock(e: &EffectInstance, cx: &FxCtx) -> Option<BeatClock> {
         return None;
     }
     let idx = pos.floor();
-    Some(BeatClock { index: idx.clamp(-1e15, 1e15) as i64, since: (pos - idx) * interval, interval, beats_per })
+    Some(BeatClock { index: idx.clamp(-1e15, 1e15) as i64, since: (pos - idx) * interval, interval, beats_per, audio: false, strength: 1.0 })
 }
 
 // ================================================================== Organic Shake
@@ -219,7 +236,11 @@ pub fn organic_shake(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     let t0 = if cx.seconds.is_finite() { cx.seconds } else { 0.0 };
     let env = if s.decay > 1e-3 { (-t0.max(0.0) / s.decay).exp() } else { 1.0 };
     // Music Sync: a fresh hit on every beat that dies away before the next one
-    let beat_env = beat_clock(e, cx).map_or(1.0, |b| 0.1 + 0.9 * (-b.since / (b.interval * 0.35)).exp());
+    // (drum hits: nothing between hits, and a stronger hit shakes harder)
+    let beat_env = beat_clock(e, cx).map_or(1.0, |b| {
+        let hit = b.strength * (-b.since / (b.interval * 0.35)).exp();
+        if b.audio { hit } else { 0.1 + 0.9 * hit }
+    });
     let amp = inten * env * beat_env;
     if amp <= 1e-4 {
         return;
@@ -431,6 +452,13 @@ pub fn flicker_stack(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     let t = if cx.seconds.is_finite() { cx.seconds.max(0.0) } else { 0.0 };
     // free-running slots, or one slot per beat (most beats fire) with Music Sync
     let (slot, frac, density) = match beat_clock(e, cx) {
+        // a drum hit always fires, for half a second at most
+        Some(b) if b.audio => {
+            if b.since > b.interval {
+                return;
+            }
+            (b.index, (b.since / b.interval) as f32, 1.0)
+        }
         Some(b) => (b.index, (b.since / b.interval) as f32, f.density.max(0.75)),
         None => {
             let pos = t * f.rate;
@@ -589,7 +617,7 @@ pub fn beat_pulse(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
             // the first beat of each bar hits a little harder
             let beat_no = (b.index as f64 * b.beats_per).floor() as i64;
             let accent = if bv(e, "accent_bar") && b.beats_per <= 1.0 && beat_no.rem_euclid(4) == 0 { 1.3 } else { 1.0 };
-            (attack * release * accent, b.index, b.since)
+            (attack * release * accent * b.strength, b.index, b.since)
         }
         None => (1.0, 0, 0.0),
     };

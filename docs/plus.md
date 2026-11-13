@@ -96,12 +96,42 @@ Alle Plus-Effekte der Sequenz bekommen Tempo und ersten Beat aus der Musik und s
 **Mit Musik synchronisieren** ein. Danach sitzen die Stöße, Zuckungen und Pulse genau auf den
 Beats. In der Gruppe **Musik-Sync** wählst du: Jeder Beat, Alle 2 Beats, Jeder Takt, Halbe Beats.
 
+**Kick (Audio)** und **Snare (Audio)** hören direkt auf den Ton der Sequenz statt auf ein Tempo:
+Organisches Wackeln mit „Kick (Audio)“ wackelt bei jeder Kick, Flacker-Stapel mit „Snare (Audio)“
+zuckt bei jeder Snare – auch bei Tempowechseln, Breaks und Drops. Dafür ist kein Sync-Befehl nötig.
+
 ### Beat-Puls (Beat Pulse)
 
 Der Klassiker für Musikvideos: Bei jedem Beat „springt“ das Bild und klingt bis zum nächsten
 wieder ab. Vorgaben: **Bass-Punch** (Zoom + leichtes Wackeln), **Blitz**, **Glow-Treffer**,
 **RGB-Kick**, **Zoom-Bounce**, **Wackel-Treffer**. Der erste Beat im Takt wird etwas stärker
 betont. Ohne Sync hält der Effekt den vollen Puls – dann per Keyframes auf **Stärke** steuern.
+
+### AVKO-Spektrum (Audio-Spektrum im AVKO-Look)
+
+Das Audio-Spektrum für deine Beat-Videos, gebaut nach deinem Logo: Jede Frequenz ist ein
+Plattenbau aus Fensterblöcken, die Antennen auf den Dächern zeigen die Spitzen (sie fahren hoch
+und sinken wieder), darunter die Straße mit Mittelstreifen, alles mit Grunge-Körnung.
+
+**So geht's:** Beat auf eine Audiospur legen, Hintergrund (Video oder Bild) auf V1, dann
+**FilmCraft Plus ▸ Musik ▸ AVKO-Spektrum** auf den Hintergrund-Clip ziehen. Fertig.
+
+- **Reagiert vor allem auf Sub und Kick, dann Snare, Melodien nur leicht.** Wie stark die
+  Melodie mitspielt, regelt **Reaktion auf Melodie** (Standard 35 %).
+- **Kick:** Die Bass-Hochhäuser springen hoch (**Kick-Sprung**) und das **ganze Bild wackelt**
+  (**Kick-Wackeln**) – Hintergrund inklusive, weil der Effekt auf dem Hintergrund-Clip liegt.
+  Optional leuchten die Fenster auf (**Fensterlicht bei Kick**, Farbe frei wählbar).
+- **Snare:** Die Snare-Bänder springen (**Snare-Sprung**) und das ganze Bild **zuckt**
+  (**Snare-Zucken**: Farbversatz plus wechselnd Versatz, Zoom-Sprung oder Lichtblitz).
+- **Treffer-Länge** = wie lange Wackeln und Zucken nachklingen, **Treffer-Empfindlichkeit** =
+  wie leicht eine Kick/Snare erkannt wird (höher bei leisen Drums).
+- **Anordnung:** Anzahl Hochhäuser, max. Stockwerke, Breite, Mitte, Straßenhöhe, Blockabstand.
+- **Look:** Gebäudefarbe (Standard: das Weiß deines Logos), Grunge, Leuchten, Straße an/aus und
+  Straßentempo (die Mittelstreifen fahren durchs Bild; negativ = andere Richtung).
+- **Audioquelle:** Gesamtmix oder eine einzelne Spur (z. B. nur die Drums auf A2).
+- **Mit Original kombinieren** aus: Das Spektrum liegt allein auf transparentem Grund, z. B. als
+  eigene Ebene über dem Hintergrund. Dann für den Hintergrund zusätzlich Organisches Wackeln
+  („Kick (Audio)“) und Flacker-Stapel („Snare (Audio)“) nutzen.
 
 ## YouTube
 

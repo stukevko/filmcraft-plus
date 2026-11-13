@@ -147,8 +147,7 @@ pub fn hits(x: &[f32], sr: u32, end: i64, sens: f32) -> (Option<Hit>, Option<Hit
     let snare = onsets(&es, first, hop, sr, rise + 1.0, 10.0, skip)
         .into_iter()
         // the beater click of a kick is not a snare
-        .filter(|(i, _)| kicks.iter().all(|(k, _)| (k - i).abs() > 3))
-        .next_back()
+        .rfind(|(i, _)| kicks.iter().all(|(k, _)| (k - i).abs() > 3))
         .map(|(i, s)| Hit { index: i, age: age(i), strength: s });
     (kick, snare)
 }

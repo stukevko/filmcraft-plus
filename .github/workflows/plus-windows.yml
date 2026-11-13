@@ -3,9 +3,13 @@
 # Media Foundation, DXVA decoding, D3D12 / Vulkan); NVIDIA (NVENC) and Intel Quick Sync work too. Not part of upstream CI: the upstream release workflow needs signing secrets this fork
 # does not have, so the build here is unsigned.
 #
-# Download: Actions ▸ "FilmCraft Plus Windows build" ▸ latest run ▸ Artifacts, or the
-# "plus-latest" release that the push to main updates.
-name: FilmCraft Plus Windows build
+# The same PC also boots macOS (OpenCore): the `macos` job builds an Intel (x86_64) FilmCraft.app
+# for it, with x86-64-v3 (AVX2 / FMA) instead of the exact CPU, since OpenCore may present the CPU
+# under another model. The app is ad-hoc signed, not notarized.
+#
+# Download: Actions ▸ "FilmCraft Plus build" ▸ latest run ▸ Artifacts, or the "plus-latest"
+# release that the push to main updates (Windows ZIP + macOS DMG).
+name: FilmCraft Plus build
 
 on:
   push:
@@ -63,14 +67,55 @@ jobs:
         with:
           name: FilmCraft-Plus-windows-x64
           path: FilmCraft-Plus-windows-x64.zip
+
+  macos:
+    # an Intel runner: native x86_64, so the packaged app's self-check runs too
+    runs-on: macos-15-intel
+    timeout-minutes: 120
+    env:
+      RUSTFLAGS: "-C target-cpu=x86-64-v3"
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fonts (Japanese UI / titles)
+        run: |
+          git clone --depth 1 https://github.com/storytold/craft-fonts ../craft-fonts || true
+          if [ -d ../craft-fonts ]; then echo "CRAFT_FONTS_DIR=$(cd ../craft-fonts && pwd)" >> "$GITHUB_ENV"; fi
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: plus-macos-x86-64-v3
+      - name: Build
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+        run: cargo build --release --locked -p filmcraft -p filmcraft-cli --features filmcraft/whisper --target x86_64-apple-darwin
+      - name: Package (FilmCraft.app on a DMG, ad-hoc signed)
+        run: |
+          packaging/macos/package.sh --arch x86_64 --skip-build
+          cp dist/release/filmcraft-*-macos-x86_64.dmg FilmCraft-Plus-macos-intel.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FilmCraft-Plus-macos-intel
+          path: FilmCraft-Plus-macos-intel.dmg
+
+  release:
+    if: github.event_name == 'push'
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
       - name: Update the plus-latest release
-        if: github.event_name == 'push'
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release delete plus-latest --yes --cleanup-tag || true
-          gh release create plus-latest FilmCraft-Plus-windows-x64.zip \
-            --title "FilmCraft Plus (Windows, neuester Stand)" \
-            --notes "Automatischer Build von ${GITHUB_SHA::7}. ZIP entpacken und 'FilmCraft Plus.exe' starten." \
+          gh release create plus-latest FilmCraft-Plus-windows-x64.zip FilmCraft-Plus-macos-intel.dmg \
+            --target "$GITHUB_SHA" \
+            --title "FilmCraft Plus (neuester Stand)" \
+            --notes "Automatischer Build von ${GITHUB_SHA::7}. Windows: ZIP entpacken und 'FilmCraft Plus.exe' starten. macOS (Intel): DMG öffnen, FilmCraft in Programme ziehen, beim ersten Start Rechtsklick ▸ Öffnen." \
             --prerelease

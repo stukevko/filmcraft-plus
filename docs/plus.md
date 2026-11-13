@@ -11,6 +11,19 @@ Effekten und einem Build für **Intel Core Ultra 7 270K Plus + AMD Radeon RX 570
    („Weitere Informationen ▸ Trotzdem ausführen“), weil der Build nicht signiert ist.
 3. Sprache: **Bearbeiten ▸ Sprache ▸ Deutsch** (falls nicht automatisch).
 
+### macOS (gleicher PC, Intel + RX 5700)
+
+1. Unter **Releases ▸ plus-latest** die Datei `FilmCraft-Plus-macos-intel.dmg` laden.
+2. DMG öffnen, **FilmCraft** in **Programme** ziehen.
+3. Die App ist nicht von Apple notarisiert. Beim ersten Start meldet macOS das: dann
+   **Systemeinstellungen ▸ Datenschutz & Sicherheit ▸ „Dennoch öffnen“** (ältere macOS-Versionen:
+   Rechtsklick auf die App ▸ Öffnen). Meldet macOS „beschädigt“, einmal im Terminal:
+   `xattr -dr com.apple.quarantine /Applications/FilmCraft.app`
+
+Alle Plus-Effekte, Beat-Marker, Musik-Sync, YouTube-Vorgaben und Auto-Untertitel gibt es auch
+auf dem Mac. Vorschau und Effekte laufen über **Metal** auf der RX 5700, der Export über Apples
+**VideoToolbox** (siehe „Optimierungen“ unten).
+
 ## Die neuen Effekte
 
 Alle drei liegen im Effekte-Fenster ganz oben im Ordner **FilmCraft Plus**. Effekt auf einen
@@ -127,6 +140,12 @@ auch Text-basiert schneiden, Pausen und Füllwörter („äh“, „ähm“) ent
     Sync? Umgebungsvariable `FILMCRAFT_HW_ENCODER=Intel` setzen.
   - Die RX 5700 kann kein AV1-Encoding und kein 10-Bit/HDR beim Export; HDR wird für H.265
     automatisch in SDR umgewandelt.
+- **macOS:** Der Mac-Build nutzt AVX2/FMA (`x86-64-v3`) statt des exakten CPU-Modells, weil
+  OpenCore die CPU oft als anderes Modell meldet. Der Export läuft über VideoToolbox auf der
+  RX 5700. Dafür muss macOS die Karte als Hardware-Encoder freigeben (üblich mit dem
+  SMBIOS-Modell **iMacPro1,1** oder **MacPro7,1**). Ob das klappt, siehst du daran, dass im Export
+  **H.265** angeboten wird. Fehlt H.265, exportiert H.264 über die CPU (langsamer, aber
+  funktioniert). Intel Quick Sync gibt es unter macOS mit diesem Prozessor nicht.
 - In den Wiedergabe-Einstellungen des Programmmonitors bei 4K ruhig **Voll** wählen; bei sehr
   vielen Effekten **1/2** für flüssige Vorschau, der Export rendert immer in voller Qualität.
 

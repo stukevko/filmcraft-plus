@@ -133,6 +133,49 @@ und sinken wieder), darunter die Straße mit Mittelstreifen, alles mit Grunge-K�
   eigene Ebene über dem Hintergrund. Dann für den Hintergrund zusätzlich Organisches Wackeln
   („Kick (Audio)“) und Flacker-Stapel („Snare (Audio)“) nutzen.
 
+## Social-Clips: ein Klick für TikTok, Reels und Shorts
+
+**Sequenz ▸ Social-Clip erstellen (Hochformat, Jumpcuts, Untertitel)** macht aus der offenen
+Sequenz einen Hochkant-Clip. Alles zusammen ist **ein** Rückgängig-Schritt (Strg/Cmd+Z).
+
+Was der Befehl der Reihe nach tut:
+
+1. **Jumpcuts:** transkribiert die Sequenz (falls noch nicht geschehen) und schneidet Pausen ab
+   0,4 s und Füllwörter („äh“, „um“) heraus.
+2. **Outro:** hängt das Projektelement an, dessen Name mit **Outro**, **Opener** oder **Endcard**
+   beginnt (z. B. der Fatboard-Opener mit Logo). Liegt es schon am Ende, passiert nichts.
+3. **Hochformat:** stellt die Sequenz auf **1080×1920** und füllt mit jedem Clip das Bild.
+   Eine Sequenz, die schon hochkant ist, behält ihre Größe.
+4. **Untertitel:** kurze, fette Einzeiler mit Kontur im unteren Drittel, auf der Untertitelspur
+   **Social**. Ein zweiter Durchlauf ersetzt die Spur, statt sie zu verdoppeln.
+
+Ohne Sprache im Clip (reine Musik-Demo) werden Jumpcuts und Untertitel übersprungen, der Rest
+läuft trotzdem. Danach exportieren mit **YouTube Shorts – Plus (GPU, −14 LUFS)**; dieselbe Datei
+passt für TikTok und Reels.
+
+5. **Hook:** Setze in der Zeitleiste einen Marker (Taste **M**), nenne ihn **Hook** und schreibe
+   deinen Satz in die **Notizen** des Markers. Der Befehl stellt den Satz die ersten 2 Sekunden
+   groß ins obere Drittel. Ohne Hook-Marker gibt es keinen Hook.
+
+Einen **Look** legst du wie gewohnt mit dem Look-Baukasten auf die Clips. Über den Steuerkanal
+oder MCP (`filmcraft --control 9876`) nimmt der Befehl Hook, Look und alle Werte auch direkt an:
+
+```json
+{"id": 1, "method": "engine.execute", "params": {"command": "plus.socialClip", "params": {"hook": "Your vocal sounds like it's under a blanket?", "look": "Warm Film", "lookStrength": 60}}}
+```
+
+| Parameter | Standard | Bedeutung |
+|---|---|---|
+| `hook` | Notizen des Markers „Hook“ | Satz, der die ersten Sekunden groß im oberen Drittel steht; `""` = keiner |
+| `hookSeconds` | 2 | Dauer des Hooks (0,2 bis 30) |
+| `look`, `lookStrength` | –, 100 | Look-Baukasten auf alle Clips außer dem Outro |
+| `outro` | nach Name | Projektelement fürs Ende; `autoOutro: false` schaltet die Namenssuche ab |
+| `pauseSeconds` | 0,4 | ab welcher Pause geschnitten wird (0,1 bis 10) |
+| `maxChars` | 18 | Zeichen pro Untertitel (6 bis 60) |
+| `vertical`, `jumpCuts`, `fillers`, `captions`, `transcribe` | an | einzelne Schritte abschalten |
+
+Das Ergebnis nennt unter `done`, was gemacht wurde, und unter `skipped`, was nicht ging und warum.
+
 ## YouTube
 
 ### Fertige Export-Vorgaben

@@ -35,6 +35,17 @@ impl Hit {
         }
         (f64::from(self.strength) * (-self.age / decay.max(0.01)).exp()) as f32
     }
+
+    /// Like [`Hit::env`], but easing in over `attack` seconds instead of jumping: the soft,
+    /// "breathing" hit of a smooth visualizer.
+    pub fn soft_env(&self, attack: f64, decay: f64) -> f32 {
+        if !self.age.is_finite() || self.age < 0.0 {
+            return 0.0;
+        }
+        let x = (self.age / attack.max(1e-3)).clamp(0.0, 1.0);
+        let ease = x * x * (3.0 - 2.0 * x);
+        (f64::from(self.env(decay)) * ease) as f32
+    }
 }
 
 /// Audio window the effects ask for (seconds).
@@ -166,6 +177,8 @@ pub struct SpectrumCfg {
     pub release: f32,
     /// Seconds a peak holds before it falls.
     pub hold: f32,
+    /// Seconds over which a rise is eased in (0 = instant).
+    pub attack: f32,
 }
 
 /// 2048 points: 43 ms at 48 kHz, short enough that a tower rises with its kick.
@@ -248,14 +261,36 @@ pub fn spectrum(x: &[f32], sr: u32, cfg: &SpectrumCfg) -> (Vec<f32>, Vec<f32>) {
     let fft = Fft::new(FFT_N);
     let win: Vec<f32> = (0..FFT_N).map(|i| 0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / FFT_N as f32).cos()).collect();
     let step = |s: f64| (s * f64::from(sr)) as usize;
-    // release: the loudest recent level, faded by its age
+    // the recent past, every 20 ms over 0.24 s
+    let past: Vec<(f32, Vec<f32>)> = (0..13)
+        .map(|k| {
+            let age = k as f32 * 0.02;
+            (age, levels(x, step(f64::from(age)), &fft, &win, &cfg, sr))
+        })
+        .collect();
+    // attack: the newest spectra averaged (weighted towards now), so a tower eases up
+    let att = cfg.attack.max(0.0);
+    let mut eased = vec![0.0f32; bands];
+    let mut wsum = 0.0f32;
+    for (age, l) in &past {
+        let w = if att <= 1e-3 { if *age == 0.0 { 1.0 } else { 0.0 } } else { (-age / att).exp() };
+        if w < 1e-3 {
+            continue;
+        }
+        wsum += w;
+        for (a, b) in eased.iter_mut().zip(l) {
+            *a += b * w;
+        }
+    }
+    for a in &mut eased {
+        *a /= wsum.max(1e-6);
+    }
+    // release: older levels fade with their age; the tower is the higher of the two
     let rel = cfg.release.max(0.01);
-    let mut level = vec![0.0f32; bands];
-    for k in 0..6 {
-        let age = k as f32 / 60.0;
-        let l = levels(x, step(f64::from(age)), &fft, &win, &cfg, sr);
-        let fade = (-age / rel).exp();
-        for (a, b) in level.iter_mut().zip(&l) {
+    let mut level = eased;
+    for (age, l) in past.iter().skip(1) {
+        let fade = (-(age - att.min(*age)) / rel).exp();
+        for (a, b) in level.iter_mut().zip(l) {
             *a = a.max(b * fade);
         }
     }
@@ -339,7 +374,7 @@ pub(crate) mod tests {
     }
 
     fn cfg() -> SpectrumCfg {
-        SpectrumCfg { bands: 20, fmin: 30.0, fmax: 12_000.0, gain: 1.0, melody: 0.35, release: 0.18, hold: 0.25 }
+        SpectrumCfg { bands: 20, fmin: 30.0, fmax: 12_000.0, gain: 1.0, melody: 0.35, release: 0.18, hold: 0.25, attack: 0.0 }
     }
 
     #[test]
@@ -358,5 +393,21 @@ pub(crate) mod tests {
         let (l2, _) = spectrum(w, SR, &cfg());
         assert!(l2.iter().take(4).copied().fold(0.0, f32::max) < low);
         assert!(weight(60.0, 0.35) > weight(3000.0, 0.35) && weight(3000.0, 0.35) >= weight(10_000.0, 0.35));
+    }
+
+    #[test]
+    fn smooth_attack_eases_the_rise_and_hits_ease_in() {
+        let x = beat();
+        let soft = SpectrumCfg { attack: 0.05, ..cfg() };
+        // 10 ms into the kick the eased tower is lower than the instant one, 120 ms in it caught up
+        let (w, _) = window(&x, 1.01);
+        let low = |l: &[f32]| l.iter().take(4).copied().fold(0.0, f32::max);
+        assert!(low(&spectrum(w, SR, &soft).0) < low(&spectrum(w, SR, &cfg()).0));
+        let (w, _) = window(&x, 1.12);
+        assert!(low(&spectrum(w, SR, &soft).0) > 0.3);
+        let h = |age| Hit { index: 0, age, strength: 1.0 };
+        assert!(h(0.0).soft_env(0.04, 0.2) < 0.01 && h(0.002).soft_env(0.04, 0.2) < h(0.04).soft_env(0.04, 0.2));
+        assert!((h(0.04).soft_env(0.04, 0.2) - h(0.04).env(0.2)).abs() < 1e-6);
+        assert_eq!(h(f64::NAN).soft_env(0.04, 0.2), 0.0);
     }
 }

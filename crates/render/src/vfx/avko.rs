@@ -42,9 +42,11 @@ fn fill(img: &mut Image, x0: f64, y0: f64, x1: f64, y1: f64, c: [f32; 4]) {
 /// The windows and balcony of one block at `(x, y)` of size `b`, cut out (`light` = `None`) or
 /// lit. Four kinds, like the logo: two square windows, one wide framed window, each with or
 /// without a balcony bar.
-fn windows(img: &mut Image, x: f64, y: f64, b: f64, kind: u32, light: Option<[f32; 4]>) {
+fn windows(img: &mut Image, x: f64, y: f64, b: f64, kind: u32, light: Option<[f32; 4]>, clip: f64) {
     let hole = light.unwrap_or([0.0; 4]);
     let line = (b * 0.07).max(1.0);
+    // everything below `clip` stays hidden (a block still rising out of the roof)
+    let fill = |img: &mut Image, x0: f64, y0: f64, x1: f64, y1: f64, c: [f32; 4]| fill(img, x0, y0, x1, y1.min(clip), c);
     let r = |img: &mut Image, u0: f64, v0: f64, u1: f64, v1: f64, c: [f32; 4]| fill(img, x + u0 * b, y + v0 * b, x + u1 * b, y + v1 * b, c);
     match kind % 2 {
         // two square windows side by side
@@ -99,6 +101,9 @@ pub fn avko_spectrum(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
         i => Some(i - 1),
     };
 
+    // Smoothness: eased rises, longer falls, slower and softer movement
+    let smooth = (f(e, "smooth", cx, 70.0) / 100.0).clamp(0.0, 1.0);
+
     // ---- listen
     let cfg = SpectrumCfg {
         bands: n,
@@ -106,8 +111,9 @@ pub fn avko_spectrum(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
         fmax: f(e, "fmax", cx, 12_000.0).clamp(500.0, 22_000.0),
         gain: (f(e, "sensitivity", cx, 100.0) / 100.0).clamp(0.1, 10.0),
         melody: (f(e, "melody", cx, 35.0) / 100.0).clamp(0.0, 1.0),
-        release: f(e, "release", cx, 0.18).clamp(0.02, 2.0),
+        release: f(e, "release", cx, 0.25).clamp(0.02, 2.0) * (0.6 + smooth),
         hold: f(e, "hold", cx, 0.25).clamp(0.0, 3.0),
+        attack: 0.06 * smooth,
     };
     let hit_sens = (f(e, "hit_sens", cx, 100.0) / 100.0).clamp(0.25, 4.0);
     let audio = cx.env.and_then(|env| env.audio(0.0, beat::WINDOW, track));
@@ -119,14 +125,19 @@ pub fn avko_spectrum(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
         }
         None => (vec![0.0; n], vec![0.0; n], None, None, beat::band_centers(&cfg, 48_000)),
     };
-    let decay = f64::from(f(e, "hit_decay", cx, 0.2).clamp(0.03, 1.5));
-    let ke = kick.map_or(0.0, |h: Hit| h.env(decay));
-    let se = snare.map_or(0.0, |h: Hit| h.env(decay * 0.8));
-    let kick_jump = (f(e, "kick_boost", cx, 60.0) / 100.0).clamp(0.0, 3.0) * ke * 0.5;
-    let snare_jump = (f(e, "snare_boost", cx, 45.0) / 100.0).clamp(0.0, 3.0) * se * 0.4;
+    let decay = f64::from(f(e, "hit_decay", cx, 0.25).clamp(0.03, 1.5)) * (0.7 + 0.6 * f64::from(smooth));
+    let attack = 0.012 + 0.05 * f64::from(smooth);
+    let ke = kick.map_or(0.0, |h: Hit| h.soft_env(attack, decay));
+    let se = snare.map_or(0.0, |h: Hit| h.soft_env(attack * 0.6, decay * 0.7));
+    let kick_jump = (f(e, "kick_boost", cx, 60.0) / 100.0).clamp(0.0, 3.0) * ke * 0.45;
+    let snare_jump = (f(e, "snare_boost", cx, 45.0) / 100.0).clamp(0.0, 3.0) * se * 0.35;
+    // the bass level (sub + kick bands) for the bounce
+    let (mut bass, mut nb) = (0.0f32, 0usize);
     for ((l, p), fc) in level.iter_mut().zip(peak.iter_mut()).zip(&centers) {
         if *fc <= 150.0 {
             *l += kick_jump;
+            bass += *l;
+            nb += 1;
         }
         if (150.0..400.0).contains(fc) || (1500.0..7000.0).contains(fc) {
             *l += snare_jump;
@@ -134,6 +145,7 @@ pub fn avko_spectrum(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
         *l = l.clamp(0.0, 1.0);
         *p = p.max(*l);
     }
+    let bass = if nb > 0 { (bass / nb as f32).clamp(0.0, 1.0) } else { 0.0 };
 
     // ---- draw the town on a layer of its own
     let c = cv(e, "color", cx);
@@ -155,22 +167,35 @@ pub fn avko_spectrum(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     let base = (f(e, "baseline", cx, 80.0) / 100.0).clamp(0.0, 1.0) as f64 * h;
     let mut town = Image::new(img.w, img.h);
     let antennas = bv(e, "antennas");
+    // a floor's roof, for a (fractional) number of floors
+    let roof_at = |fl: f64| base - fl * b - (fl - 1.0).max(0.0) * g;
     for i in 0..n {
-        let lv = level.get(i).copied().unwrap_or(0.0);
-        let pk = peak.get(i).copied().unwrap_or(0.0);
-        let fl = ((f64::from(lv) * floors as f64).round() as usize).clamp(1, floors);
-        let pf = ((f64::from(pk) * floors as f64).round() as usize).clamp(fl, floors);
+        let lv = f64::from(level.get(i).copied().unwrap_or(0.0));
+        let pk = f64::from(peak.get(i).copied().unwrap_or(0.0));
+        // continuous height: whole floors, and the next one rising out of the roof
+        let height = (lv * floors as f64).clamp(1.0, floors as f64);
+        let full = height.floor() as usize;
+        let rise = height - full as f64;
         let bx = x0 + i as f64 * pitch + g / 2.0;
-        for j in 0..fl {
+        for j in 0..full {
             let by = base - (j + 1) as f64 * b - j as f64 * g;
             fill(&mut town, bx, by, bx + b, by + b, color);
             let kind = (hash01(i as i64, j as i64, 1, seed) * 4.0) as u32;
-            windows(&mut town, bx, by, b, kind, light);
+            windows(&mut town, bx, by, b, kind, light, f64::INFINITY);
+        }
+        if rise > 0.02 && full < floors {
+            // drawn in its final place, shifted down and cut off at the roof below it
+            let clip = roof_at(full as f64) - g;
+            let by = base - (full + 1) as f64 * b - full as f64 * g + (1.0 - rise) * (b + g);
+            fill(&mut town, bx, by, bx + b, (by + b).min(clip), color);
+            let kind = (hash01(i as i64, full as i64, 1, seed) * 4.0) as u32;
+            windows(&mut town, bx, by, b, kind, light, clip);
         }
         if antennas {
-            let roof_at = |fl: usize| base - fl as f64 * b - (fl.saturating_sub(1)) as f64 * g;
+            let top = roof_at(height);
+            let peak_roof = roof_at((pk * floors as f64).clamp(height, floors as f64));
             let ax = bx + b * (0.25 + 0.5 * f64::from(hash01(i as i64, 0, 2, seed)));
-            antenna(&mut town, ax, roof_at(fl), roof_at(pf), b, (hash01(i as i64, 0, 3, seed) * 2.0) as u32, color);
+            antenna(&mut town, ax, top, peak_roof, b, (hash01(i as i64, 0, 3, seed) * 2.0) as u32, color);
         }
     }
     if bv(e, "street") {
@@ -211,51 +236,63 @@ pub fn avko_spectrum(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     if !on_original {
         img.px.fill(0.0);
     }
+    // an opaque picture under the town (a background clip) needs its edges covered when it moves;
+    // a transparent layer (Transparent Video) does not
+    let corner = |x: usize, y: usize| img.px.get((y * img.w + x) * 4 + 3).copied().unwrap_or(0.0);
+    let opaque = on_original && [corner(0, 0), corner(img.w - 1, 0), corner(0, img.h - 1), corner(img.w - 1, img.h - 1)].iter().all(|a| *a > 0.5);
     img.px.par_chunks_mut(4).zip(town.px.par_chunks(4)).for_each(|(p, t)| {
         let inv = 1.0 - t[3];
         for c in 0..4 {
             p[c] = t[c] + p[c] * inv;
         }
     });
-    let glow = (f(e, "glow", cx, 15.0) / 100.0).clamp(0.0, 1.0) * (1.0 + 0.8 * ke);
+    let glow = (f(e, "glow", cx, 15.0) / 100.0).clamp(0.0, 1.0) * (1.0 + 0.6 * ke);
     if glow > 0.005 {
         let soft = soft_blur(&town, (10.0 * k) as f32);
         let g = glow * 1.4;
         img.px.par_chunks_mut(4).zip(soft.px.par_chunks(4)).for_each(|(p, s)| add_light(p, [s[0] * g, s[1] * g, s[2] * g]));
     }
 
-    // ---- the whole picture moves with the drums
-    let mid = Vec2::new(w / 2.0, h / 2.0);
+    // ---- movement: a smooth bass bounce, a soft shake on kicks, a gentle twitch on snares
     let small = w.min(h).max(1.0);
-    if let Some(kh) = kick {
-        let amt = f64::from((f(e, "kick_shake", cx, 60.0) / 100.0).clamp(0.0, 5.0)) * f64::from(ke);
-        if amt > 0.003 {
-            let wob = (kh.age * std::f64::consts::TAU * 7.0).cos();
-            let ang = f64::from(hash01(kh.index, 3, 9, seed)) * std::f64::consts::TAU;
-            let d = 28.0 * k * amt * wob;
-            let rot = (f64::from(hash01(kh.index, 4, 9, seed)) - 0.5) * 2.4 * amt * wob;
-            // zoom in just enough that the moved picture still covers the frame
-            let cover = if on_original { 1.0 + 2.0 * d.abs() / small + rot.abs().to_radians() * (w.max(h) / small) } else { 1.0 };
-            place(img, mid, Vec2::new(ang.cos() * d, ang.sin() * d), (1.0 + 0.035 * amt) * cover, rot);
-        }
+    let secs = if cx.seconds.is_finite() { cx.seconds } else { 0.0 };
+    let smooth = f64::from(smooth);
+    let bounce = f64::from((f(e, "bounce", cx, 40.0) / 100.0).clamp(0.0, 5.0)) * f64::from(bass);
+    let shake = f64::from((f(e, "kick_shake", cx, 35.0) / 100.0).clamp(0.0, 5.0)) * f64::from(ke);
+    let (mut off, mut rot) = (Vec2::new(0.0, 0.0), 0.0);
+    if shake > 0.002 {
+        // flowing noise, slower the smoother, scaled by the kick (no jerky back-and-forth)
+        let hz = 6.0 - 3.5 * smooth;
+        let nz = |ch: u64| super::plus::shake_noise(secs * hz, ch, seed, 2.0);
+        let d = 16.0 * k * shake;
+        off = Vec2::new(nz(0) * d, nz(1) * d);
+        rot = nz(2) * 0.8 * shake;
+    }
+    let zoom = 1.0 + 0.05 * bounce + 0.012 * shake;
+    if zoom > 1.0005 || off.length() > 0.05 || rot.abs() > 0.005 {
+        let cover = if opaque { 1.0 + 2.0 * off.length() / small + rot.abs().to_radians() * (w.max(h) / small) } else { 1.0 };
+        // a separate layer bounces from its street, a full picture from its centre
+        let anchor = if opaque { Vec2::new(w / 2.0, h / 2.0) } else { Vec2::new(x0 + width / 2.0, base) };
+        place(img, anchor, off, zoom * cover, rot);
     }
     if let Some(sh) = snare {
-        let s = f64::from((f(e, "snare_twitch", cx, 50.0) / 100.0).clamp(0.0, 5.0)) * f64::from(se);
+        let s = f64::from((f(e, "snare_twitch", cx, 30.0) / 100.0).clamp(0.0, 5.0)) * f64::from(se);
         if s > 0.003 {
             let r = |a: i64| f64::from(hash01(sh.index, a, 11, seed));
+            let mid = Vec2::new(w / 2.0, h / 2.0);
             match (r(1) * 3.0) as u32 {
                 0 => {
-                    let d = 45.0 * k * s * if r(2) < 0.5 { -1.0 } else { 1.0 };
-                    let cover = if on_original { 1.0 + 2.0 * d.abs() / w.max(1.0) } else { 1.0 };
+                    let d = 14.0 * k * s * if r(2) < 0.5 { -1.0 } else { 1.0 };
+                    let cover = if opaque { 1.0 + 2.0 * d.abs() / w.max(1.0) } else { 1.0 };
                     place(img, mid, Vec2::new(d, 0.0), cover, 0.0);
                 }
-                1 => place(img, mid, Vec2::new(0.0, 0.0), 1.0 + 0.09 * s, 0.0),
+                1 => place(img, mid, Vec2::new(0.0, 0.0), 1.0 + 0.03 * s, 0.0),
                 _ => {
-                    let gain = (1.0 + 0.9 * s) as f32;
+                    let gain = (1.0 + 0.35 * s) as f32;
                     img.map_rgb(|c, _, _| [c[0] * gain, c[1] * gain, c[2] * gain]);
                 }
             }
-            rgb_shift(img, (16.0 * k * s) as f32 * if r(3) < 0.5 { -1.0 } else { 1.0 });
+            rgb_shift(img, (7.0 * k * s) as f32 * if r(3) < 0.5 { -1.0 } else { 1.0 });
         }
     }
 }
@@ -449,14 +486,15 @@ mod tests {
     }
 }
 
-/// Writes preview frames (raw sRGB8 RGBA, 960×540) of the effect over a night-sky gradient to the
-/// folder in `FILMCRAFT_AVKO_PREVIEW`: `cargo test -p filmcraft-render avko_preview -- --ignored`.
+/// Writes a preview clip (raw sRGB8 RGB frames, 640×360 at 30 fps, 2 s of the test beat) of the
+/// effect on its own transparent layer over a night-sky background to the folder in
+/// `FILMCRAFT_AVKO_PREVIEW`: `cargo test -p filmcraft-render avko_preview -- --ignored`.
 #[cfg(test)]
 #[test]
 #[ignore = "writes preview images"]
 fn avko_preview() {
     use crate::vfx::{AudioWindow, FxEnv};
-    use filmcraft_project::{ParamValue, find_effect};
+    use filmcraft_project::find_effect;
     let Some(dir) = std::env::var_os("FILMCRAFT_AVKO_PREVIEW") else { return };
     struct Env(Vec<f32>, f64);
     impl FxEnv for Env {
@@ -491,10 +529,10 @@ fn avko_preview() {
             String::new()
         }
         fn sequence_size(&self) -> (u32, u32) {
-            (960, 540)
+            (640, 360)
         }
         fn source_size(&self) -> (u32, u32) {
-            (960, 540)
+            (640, 360)
         }
         fn clip_key(&self) -> u64 {
             1
@@ -505,17 +543,11 @@ fn avko_preview() {
         }
     }
     let x = beat::tests::beat();
-    for (name, t) in [("between", 0.62), ("kick", 1.035), ("snare", 1.265)] {
-        let mut img = Image::new(960, 540);
-        for (i, p) in img.px.chunks_mut(4).enumerate() {
-            let (px, py) = ((i % 960) as f32 / 960.0, (i / 960) as f32 / 540.0);
-            let c = super::dec([0.05 + 0.08 * py, 0.05 + 0.04 * px, 0.12 + 0.1 * (1.0 - py)]);
-            p.copy_from_slice(&[c[0], c[1], c[2], 1.0]);
-        }
-        let mut e = find_effect("avko_spectrum").expect("def").instance();
-        if let Some(p) = e.param_mut("lights") {
-            p.value = ParamValue::Float(if name == "kick" { 60.0 } else { 0.0 });
-        }
+    let e = find_effect("avko_spectrum").expect("def").instance();
+    let (w, h) = (640usize, 360usize);
+    let mut out = Vec::new();
+    for fno in 0..60 {
+        let t = fno as f64 / 30.0;
         let env = Env(x.clone(), t);
         let cx = FxCtx {
             t: filmcraft_time::Tick::from_seconds_f64(t),
@@ -528,16 +560,19 @@ fn avko_preview() {
             frame_rate: 30.0,
             working: Default::default(),
         };
-        avko_spectrum(&mut img, &e, &cx);
-        let bytes: Vec<u8> = img
-            .px
-            .chunks(4)
-            .flat_map(|p| {
-                let a = p[3].max(1e-6);
-                let s = super::enc([p[0] / a, p[1] / a, p[2] / a]);
-                [s[0], s[1], s[2], p[3]].map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
-            })
-            .collect();
-        std::fs::write(std::path::Path::new(&dir).join(format!("{name}.rgba")), bytes).expect("write");
+        // the spectrum on a Transparent Video layer ...
+        let mut layer = Image::new(w, h);
+        avko_spectrum(&mut layer, &e, &cx);
+        // ... over the background
+        for (i, p) in layer.px.chunks(4).enumerate() {
+            let (px, py) = ((i % w) as f32 / w as f32, (i / w) as f32 / h as f32);
+            let bg = super::dec([0.05 + 0.08 * py, 0.05 + 0.04 * px, 0.12 + 0.1 * (1.0 - py)]);
+            let inv = 1.0 - p[3];
+            let c = super::enc([p[0] + bg[0] * inv, p[1] + bg[1] * inv, p[2] + bg[2] * inv]);
+            out.extend(c.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8));
+        }
     }
+    std::fs::write(std::path::Path::new(&dir).join("clip.rgb"), out).expect("write");
+    let pcm: Vec<u8> = x.iter().flat_map(|v| v.to_le_bytes()).collect();
+    std::fs::write(std::path::Path::new(&dir).join("beat.f32"), pcm).expect("write");
 }

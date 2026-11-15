@@ -115,6 +115,9 @@ fn beat_clock(e: &EffectInstance, cx: &FxCtx) -> Option<BeatClock> {
         let hit = if mode == filmcraft_project::effect::SYNC_KICK { kick } else { snare };
         // no hit in the last second: far past the last one, so everything is at rest
         let (index, since, strength) = hit.map_or((i64::MIN / 2, 10.0, 0.0), |h| (h.index, h.age, f64::from(h.strength)));
+        // ease in over 35 ms instead of jumping: drum-driven movement stays smooth
+        let x = (since / 0.035).clamp(0.0, 1.0);
+        let strength = strength * x * x * (3.0 - 2.0 * x);
         return Some(BeatClock { index, since, interval: 0.5, beats_per: 2.0, audio: true, strength });
     }
     let bpm = fv(e, "bpm", cx) as f64;
@@ -201,7 +204,7 @@ fn shake_params(e: &EffectInstance, cx: &FxCtx) -> Shake {
 }
 
 /// Fractal 1-D noise, about −1..1 (fractional octaves fade in, like `fbm`).
-fn shake_noise(t: f64, ch: u64, seed: u64, rough: f64) -> f64 {
+pub(super) fn shake_noise(t: f64, ch: u64, seed: u64, rough: f64) -> f64 {
     let n = rough.clamp(1.0, 6.0);
     let (mut s, mut a, mut f, mut norm) = (0.0, 1.0, 1.0, 0.0);
     let mut o = 0u64;
@@ -451,25 +454,32 @@ pub fn flicker_stack(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     let seed = seed_of(e, cx);
     let t = if cx.seconds.is_finite() { cx.seconds.max(0.0) } else { 0.0 };
     // free-running slots, or one slot per beat (most beats fire) with Music Sync
-    let (slot, frac, density) = match beat_clock(e, cx) {
+    // `soft`: drum hits fade out smoothly and a little gentler instead of holding until the next slot
+    let (slot, frac, density, soft) = match beat_clock(e, cx) {
         // a drum hit always fires, for half a second at most
         Some(b) if b.audio => {
             if b.since > b.interval {
                 return;
             }
-            (b.index, (b.since / b.interval) as f32, 1.0)
+            (b.index, (b.since / b.interval) as f32, 1.0, Some(b.strength * (-b.since / 0.14).exp() * 0.6))
         }
-        Some(b) => (b.index, (b.since / b.interval) as f32, f.density.max(0.75)),
+        Some(b) => (b.index, (b.since / b.interval) as f32, f.density.max(0.75), None),
         None => {
             let pos = t * f.rate;
-            (pos.floor().clamp(-1e15, 1e15) as i64, (pos - pos.floor()) as f32, f.density)
+            (pos.floor().clamp(-1e15, 1e15) as i64, (pos - pos.floor()) as f32, f.density, None)
         }
     };
     let r = |a: i64, b: i64| hash01(slot, a, b, seed);
     if r(0, 1) as f64 >= density {
         return;
     }
-    let strength = ((0.35 + 0.65 * r(1, 1)) * (1.0 - 0.45 * frac)) as f64 * amount;
+    let strength = match soft {
+        Some(k) => (0.35 + 0.65 * f64::from(r(1, 1))) * k * amount,
+        None => ((0.35 + 0.65 * r(1, 1)) * (1.0 - 0.45 * frac)) as f64 * amount,
+    };
+    if strength <= 1e-3 {
+        return;
+    }
     // which operations fire in this slot (at least one of the enabled ones)
     let enabled: Vec<usize> = (0..7).filter(|&i| f.ops[i]).collect();
     let mut on = [false; 7];
@@ -612,7 +622,7 @@ pub fn beat_pulse(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     let (env, index, since) = match &clock {
         Some(b) => {
             // a 10 ms attack so the punch does not click, then an exponential release
-            let attack = (b.since / 0.01).min(1.0);
+            let attack = (b.since / if b.audio { 0.03 } else { 0.01 }).min(1.0);
             let release = (-b.since / (b.interval * p.decay)).exp();
             // the first beat of each bar hits a little harder
             let beat_no = (b.index as f64 * b.beats_per).floor() as i64;

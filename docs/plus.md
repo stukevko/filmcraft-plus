@@ -113,25 +113,35 @@ Das Audio-Spektrum für deine Beat-Videos, gebaut nach deinem Logo: Jede Frequen
 Plattenbau aus Fensterblöcken, die Antennen auf den Dächern zeigen die Spitzen (sie fahren hoch
 und sinken wieder), darunter die Straße mit Mittelstreifen, alles mit Grunge-Körnung.
 
-**So geht's:** Beat auf eine Audiospur legen, Hintergrund (Video oder Bild) auf V1, dann
-**FilmCraft Plus ▸ Musik ▸ AVKO-Spektrum** auf den Hintergrund-Clip ziehen. Fertig.
+**So geht's (eigene Ebene, empfohlen):**
+1. Beat auf eine Audiospur, Hintergrund (Video oder Bild) auf **V1**.
+2. **Datei ▸ Neu ▸ Transparentes Video…** und auf **V2** über den Hintergrund legen, so lang wie der Song.
+3. **FilmCraft Plus ▸ Musik ▸ AVKO-Spektrum** auf das transparente Video ziehen.
 
-- **Reagiert vor allem auf Sub und Kick, dann Snare, Melodien nur leicht.** Wie stark die
-  Melodie mitspielt, regelt **Reaktion auf Melodie** (Standard 35 %).
-- **Kick:** Die Bass-Hochhäuser springen hoch (**Kick-Sprung**) und das **ganze Bild wackelt**
-  (**Kick-Wackeln**) – Hintergrund inklusive, weil der Effekt auf dem Hintergrund-Clip liegt.
-  Optional leuchten die Fenster auf (**Fensterlicht bei Kick**, Farbe frei wählbar).
-- **Snare:** Die Snare-Bänder springen (**Snare-Sprung**) und das ganze Bild **zuckt**
-  (**Snare-Zucken**: Farbversatz plus wechselnd Versatz, Zoom-Sprung oder Lichtblitz).
-- **Treffer-Länge** = wie lange Wackeln und Zucken nachklingen, **Treffer-Empfindlichkeit** =
-  wie leicht eine Kick/Snare erkannt wird (höher bei leisen Drums).
-- **Anordnung:** Anzahl Hochhäuser, max. Stockwerke, Breite, Mitte, Straßenhöhe, Blockabstand.
-- **Look:** Gebäudefarbe (Standard: das Weiß deines Logos), Grunge, Leuchten, Straße an/aus und
-  Straßentempo (die Mittelstreifen fahren durchs Bild; negativ = andere Richtung).
-- **Audioquelle:** Gesamtmix oder eine einzelne Spur (z. B. nur die Drums auf A2).
-- **Mit Original kombinieren** aus: Das Spektrum liegt allein auf transparentem Grund, z. B. als
-  eigene Ebene über dem Hintergrund. Dann für den Hintergrund zusätzlich Organisches Wackeln
-  („Kick (Audio)“) und Flacker-Stapel („Snare (Audio)“) nutzen.
+So bewegt sich nur das Spektrum, nicht dein ganzes Projekt.
+
+- **Reagiert vor allem auf Sub und Kick, dann Snare, Melodien nur leicht** (**Reaktion auf
+  Melodie**, Standard 35 %).
+- **Weichheit** (Standard 70 %): Hochhäuser wachsen weich aus dem Dach statt zu springen,
+  fallen langsamer, und Wackeln/Zucken laufen sanft ein und aus. Höher = noch ruhiger.
+- **Bass-Bounce:** Das Spektrum „atmet“ mit dem Bass (sanftes Zoomen von der Straße aus) – der
+  Trap-City-Look.
+- **Kick:** Bass-Hochhäuser springen (**Kick-Sprung**), dazu ein weiches, fließendes Wackeln
+  (**Kick-Wackeln**, Standard 35 %). Optional **Fensterlicht bei Kick**.
+- **Snare:** sanftes **Snare-Zucken** (leichter Farbversatz, kleiner Versatz/Zoom oder Aufhellen).
+- **Treffer-Länge** = wie lange es nachklingt, **Treffer-Empfindlichkeit** = wie leicht
+  Kick/Snare erkannt werden.
+- **Anordnung** (Hochhäuser, Stockwerke, Breite, Mitte, Straßenhöhe, Blockabstand), **Look**
+  (Gebäudefarbe, Grunge, Leuchten, Straße, Straßentempo) und **Audioquelle** (Gesamtmix oder eine
+  Spur, z. B. nur die Drums).
+
+**Soll der Hintergrund sanft mitgehen** (wie bei Trap City), lege auf den Hintergrund-Clip:
+- **Beat-Puls**, Vorgabe **Zoom-Bounce**, Sync **Kick (Audio)**, Stärke ca. 40–60 %, und/oder
+- **Organisches Wackeln**, Vorgabe **Handkamera**, Sync **Kick (Audio)**, Intensität ca. 50 %.
+
+Beide laufen bei Kick-Treffern weich ein und aus. Den ganzen Hintergrund direkt mit dem
+AVKO-Spektrum zu bewegen geht weiterhin: Effekt auf den Hintergrund-Clip statt aufs
+transparente Video legen.
 
 ## YouTube
 

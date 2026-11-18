@@ -20,6 +20,7 @@ mod avko;
 mod beat;
 mod distort;
 pub mod face;
+pub(crate) mod follow;
 mod immersive;
 pub(crate) mod inout;
 mod lights;
@@ -216,6 +217,17 @@ impl FxEnv for ItemEnv<'_> {
             self.item.reverse as u64,
         ] {
             h = (h ^ v).wrapping_mul(0x0100_0000_01b3);
+        }
+        // …and of what it shows: item ids start over in every project, so the analyses cached for
+        // a clip (faces, subjects) must not be handed to another project's clip with the same id
+        if let Some(pi) = self.project.item(self.item.item) {
+            let what = match &pi.kind {
+                filmcraft_project::ItemKind::Media(m) => format!("{:?} {:?}", m.media, m.identity),
+                _ => String::new(),
+            };
+            for b in pi.name.bytes().chain(what.bytes()) {
+                h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+            }
         }
         h
     }
@@ -577,7 +589,7 @@ pub fn apply(img: &mut Image, e: &EffectInstance, cx: &FxCtx) -> bool {
         "beat_pulse" => plus::beat_pulse(img, e, cx),
         "avko_spectrum" => avko::avko_spectrum(img, e, cx),
         // moves the placed layer instead of its pixels (see `inout::placement`)
-        inout::ID => {}
+        inout::ID | follow::ID => {}
         "auto_focus" => portrait::auto_focus(img, e, cx),
         "studio_light" => portrait::studio_light(img, e, cx),
         id if id.starts_with("vr_") => immersive::apply(img, e, cx),

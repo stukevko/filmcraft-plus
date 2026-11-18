@@ -3763,6 +3763,7 @@
 	YouTube 1080p – Plus (GPU, −14 LUFS)	YouTube 1080p – Plus (GPU, −14 LUFS)
 	YouTube 4K – Plus (GPU HEVC, −14 LUFS)	YouTube 4K – Plus (GPU HEVC, −14 LUFS)
 	YouTube Shorts – Plus (GPU, −14 LUFS)	YouTube Shorts – Plus (GPU, −14 LUFS)
+	Reels / TikTok – Plus (GPU, −14 LUFS)	Reels / TikTok – Plus (GPU, −14 LUFS)
 	H.264 1920×1080 on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), VBR 24 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS	H.264 1920×1080 über den GPU-Encoder (AMD VCN, NVIDIA NVENC oder Intel Quick Sync), VBR 24 Mbit/s, AAC 320 kbit/s, Lautheit auf −14 LUFS normalisiert
 	H.265 3840×2160 on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), VBR 60 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS	H.265 3840×2160 über den GPU-Encoder (AMD VCN, NVIDIA NVENC oder Intel Quick Sync), VBR 60 Mbit/s, AAC 320 kbit/s, Lautheit auf −14 LUFS normalisiert
 	H.264 1080×1920 portrait on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), scaled to fill, VBR 16 Mbps, loudness normalized to −14 LUFS	H.264 1080×1920 Hochformat über den GPU-Encoder (AMD VCN, NVIDIA NVENC oder Intel Quick Sync), füllend skaliert, VBR 16 Mbit/s, Lautheit auf −14 LUFS normalisiert
@@ -3885,3 +3886,23 @@
 	In Duration	Dauer rein
 	Animate Out	Raus animieren
 	Out Duration	Dauer raus
+	Vertical Version	Hochformat-Version
+	9:16 (Reels / TikTok / Shorts)	9:16 (Reels / TikTok / Shorts)
+	1:1 (Square)	1:1 (Quadrat)
+	4:5 (Portrait)	4:5 (Hochformat)
+	Make Version in Another Shape	Version in anderem Format erstellen
+	Sound Effects	Sound-Effekte
+	Add Sounds to All Transitions	Sounds auf alle Übergänge legen
+	Add Swish to Every Cut	Swish auf jeden Schnitt legen
+	Whoosh	Whoosh
+	Long Whoosh	Langer Whoosh
+	Swish	Swish
+	Impact	Impact
+	Riser	Riser
+	Import All Sounds into the Project	Alle Sounds ins Projekt importieren
+	Add Sound Effect	Sound-Effekt hinzufügen
+	Face Follow	Gesicht folgen
+	Fill Frame	Bild füllen
+	Follow	Folgen
+	Horizontal Offset	Horizontaler Versatz
+	Face Height	Gesichtshöhe

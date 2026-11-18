@@ -219,6 +219,24 @@ fn animate_in_out() -> EffectDef {
     )
 }
 
+/// Face Follow: the clip fills the frame and pans so the face stays in it (the compositor moves
+/// the placed layer; see `filmcraft_render`).
+fn face_follow() -> EffectDef {
+    video(
+        "face_follow",
+        "Face Follow",
+        REELS,
+        vec![
+            b("fill", "Fill Frame", true),
+            fs("zoom", "Zoom", 100.0, (100.0, 800.0), (100.0, 250.0), "%", 0),
+            pct("follow", "Follow", 100.0),
+            pct("smooth", "Tracking Smoothness", 60.0),
+            fs("offset", "Horizontal Offset", 0.0, (-50.0, 50.0), (-50.0, 50.0), "%", 0),
+            fs("height", "Face Height", 40.0, (5.0, 95.0), (10.0, 90.0), "%", 0),
+        ],
+    )
+}
+
 /// The face-tracking group shared by the portrait effects.
 fn face_tracking() -> Vec<ParamDef> {
     const G: &str = "Face Tracking";
@@ -388,7 +406,8 @@ fn transitions() -> Vec<EffectDef> {
 }
 
 pub(super) fn defs() -> Vec<EffectDef> {
-    let mut v = vec![organic_shake(), flicker_stack(), look_builder(), beat_pulse(), avko_spectrum(), auto_focus(), studio_light(), animate_in_out()];
+    let mut v =
+        vec![organic_shake(), flicker_stack(), look_builder(), beat_pulse(), avko_spectrum(), auto_focus(), studio_light(), animate_in_out(), face_follow()];
     for d in &mut v {
         d.accelerated = false;
         d.float32 = true;
@@ -404,7 +423,9 @@ mod tests {
 
     #[test]
     fn plus_effects_are_registered_in_their_folder() {
-        for id in ["organic_shake", "flicker_stack", "look_builder", "beat_pulse", "avko_spectrum", "auto_focus", "studio_light", "animate_in_out"] {
+        for id in
+            ["organic_shake", "flicker_stack", "look_builder", "beat_pulse", "avko_spectrum", "auto_focus", "studio_light", "animate_in_out", "face_follow"]
+        {
             let d = find_effect(id).unwrap_or_else(|| panic!("missing {id}"));
             assert_eq!(d.category.first(), Some(&super::PLUS_TOP), "{id}");
             // every parameter id is unique

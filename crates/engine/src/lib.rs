@@ -43,6 +43,8 @@ pub mod perf;
 pub mod plus;
 pub mod plus_captions;
 pub mod plus_project;
+pub mod plus_sounds;
+pub mod plus_vertical;
 pub mod presets;
 pub mod previews;
 pub mod project_manager;

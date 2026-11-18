@@ -173,6 +173,12 @@ pub fn builtin_presets() -> Vec<ExportPreset> {
             "H.264 1080×1920 portrait on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), scaled to fill, VBR 16 Mbps, loudness normalized to −14 LUFS",
             ExportSettings { scaling: Scaling::ScaleToFill, ..plus_youtube(Format::H264, (1080, 1920), 16_000, 20_000) },
         ),
+        p(
+            "Reels / TikTok – Plus (GPU, −14 LUFS)",
+            "FilmCraft Plus",
+            "H.264 1080×1920 portrait on the GPU encoder (AMD VCN, NVIDIA NVENC or Intel Quick Sync), scaled to fill, VBR 12 Mbps, AAC 320 kbps, loudness normalized to −14 LUFS",
+            ExportSettings { scaling: Scaling::ScaleToFill, ..plus_youtube(Format::H264, (1080, 1920), 12_000, 16_000) },
+        ),
         p("Apple ProRes 422 HQ", bc, "QuickTime, ProRes 422 HQ, 24-bit 48 kHz PCM", mov(Format::ProRes, "hq")),
         p("Apple ProRes 422", bc, "QuickTime, ProRes 422, 24-bit 48 kHz PCM", mov(Format::ProRes, "standard")),
         p("Apple ProRes 422 LT", bc, "QuickTime, ProRes 422 LT, 24-bit 48 kHz PCM", mov(Format::ProRes, "lt")),

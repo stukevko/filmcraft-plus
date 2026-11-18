@@ -576,6 +576,7 @@ pub(crate) fn item_layer_ex(
     let px_scale = layer.w as f32 / src_size.0.max(1) as f32;
     // layer px → source px → sequence px → output px
     let m = Affine::scale(opts.scale as f64, opts.scale as f64).then_apply(&motion).then_apply(&Affine::scale(1.0 / px_scale as f64, 1.0 / px_scale as f64));
+    let mut follow = None;
     if opts.effects {
         let env = vfx::ItemEnv { project, seq, item, t, opts, sources, want, layer_size: (layer.w, layer.h), layer_to_output: m, tc };
         let cx = effects::FxCtx {
@@ -595,7 +596,10 @@ pub(crate) fn item_layer_ex(
             }
             mask::apply_effect(&mut layer, e, &cx);
         }
+        // FilmCraft Plus Face Follow fills the frame with the clip and pans with the face
+        follow = vfx::follow::placement(item, &cx, &layer, &m, (w as f64, h as f64));
     }
+    let m = follow.map_or(m, |f| f.then_apply(&m));
     mask::apply_opacity_masks(&mut layer, item, mt, px_scale);
     // FilmCraft Plus Animate In / Out moves and fades the placed layer at the clip's ends
     let centre = m.apply(filmcraft_geom::Vec2::new(layer.w as f64 / 2.0, layer.h as f64 / 2.0));

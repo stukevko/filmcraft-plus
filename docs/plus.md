@@ -152,6 +152,8 @@ Im Export unter **Vorgaben ▸ FilmCraft Plus**:
 - **YouTube 1080p – Plus (GPU, −14 LUFS)**: H.264, 24 Mbit/s
 - **YouTube 4K – Plus (GPU HEVC, −14 LUFS)**: H.265 über die RX 5700, 60 Mbit/s
 - **YouTube Shorts – Plus (GPU, −14 LUFS)**: 1080×1920 Hochformat
+- **Reels / TikTok – Plus (GPU, −14 LUFS)**: 1080×1920 Hochformat, 12 Mbit/s (Instagram und
+  TikTok komprimieren ohnehin nach; mehr bringt dort nichts)
 
 Alle laufen über den Hardware-Encoder der Grafikkarte und normalisieren den Ton auf **−14 LUFS** (true peak −1 dBTP). Das ist
 der Pegel, auf den YouTube regelt – dein Video wird also nicht leiser gedreht.
@@ -227,6 +229,38 @@ ist. Kürzt du den Clip, wandert die Animation mit.
   Zoom, Drehung oder einfaches Einblenden.
 - **Dauer rein / raus** in Sekunden; rein oder raus lässt sich einzeln abschalten.
 - **Stärke** und **Nachfedern** für mehr oder weniger Bewegung.
+
+### Hochformat-Automatik (Sequenz ▸ Hochformat-Version)
+
+Aus einem Querformat-Schnitt wird mit einem Klick eine Hochformat-Version:
+**Sequenz ▸ Hochformat-Version ▸ 9:16 (Reels / TikTok / Shorts)**. Außerdem 1:1 und 4:5.
+
+- Es entsteht eine **Kopie** der Sequenz („… 9x16“) mit demselben Schnitt, denselben Übergängen,
+  Ton und Untertiteln. Dein Original bleibt, wie es ist.
+- Jeder Clip, der das Bild gefüllt hat, bekommt den Effekt **Gesicht folgen**: Er füllt das
+  Hochformat und schwenkt ruhig mit deinem Gesicht mit, ohne dass je ein Rand sichtbar wird.
+- Kleine Einblendungen (Bild im Bild) behalten Größe und Platz relativ zur Mitte. Titel musst
+  du eventuell neu platzieren, weil das Bild schmaler ist.
+- Feinschliff pro Clip unter **Gesicht folgen**: **Zoom** (näher ran, dann folgt es auch nach
+  oben/unten), **Folgen** (0 = starr in der Mitte), **Verfolgung glätten** (ruhigere Kamera),
+  **Horizontaler Versatz** und **Gesichtshöhe** (wo im Bild das Gesicht sitzen soll).
+- Der Effekt liegt auch einzeln unter **Effekte ▸ FilmCraft Plus ▸ Reels & Shorts**.
+
+### Sound-Effekte (Sequenz ▸ Sound-Effekte)
+
+Sieben eigene Sounds, von FilmCraft Plus selbst erzeugt (keine fremden Samples, nichts zu
+lizenzieren): **Whoosh, Langer Whoosh, Swish, Impact, Riser, Glitch, Pop**.
+
+- **Sounds auf alle Übergänge legen:** Unter jeden Übergang kommt der passende Sound, die
+  lauteste Stelle genau auf die Mitte des Übergangs (Reißschwenk → Whoosh, Durchschlag-Zoom →
+  Impact, Glitch-Schnitt → Glitch, Blenden → leiser Swish).
+- **Swish auf jeden Schnitt legen:** für harte Schnitte auf V1.
+- Jeder Sound einzeln legt ihn an die **Abspielposition**. Beim Riser endet der Sound auf der
+  Abspielposition, also Position auf den Schnitt stellen.
+- Die Sounds landen auf einer eigenen Tonspur **SFX**. Wo dort schon etwas liegt, wird nichts
+  doppelt gelegt. Lautstärke regelst du über die Spur oder den Clip.
+- **Alle Sounds ins Projekt importieren** legt sie in die Ablage „FilmCraft Plus Sounds“, zum
+  Ziehen von Hand. Die WAV-Dateien liegen neben deiner Projektdatei.
 
 ### Studiolicht (Effekte ▸ FilmCraft Plus ▸ Porträt)
 

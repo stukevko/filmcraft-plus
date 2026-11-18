@@ -33,6 +33,7 @@ mod grunge;
 mod legacy;
 mod lights;
 mod motion;
+mod plus;
 mod special;
 pub mod wipe;
 
@@ -68,6 +69,7 @@ pub fn apply_scaled(e: &EffectInstance, a: &Image, b: &Image, p: f32, scale: f32
         .or_else(|| lights::apply(id, &t))
         .or_else(|| grunge::apply(id, &t))
         .or_else(|| special::apply(id, &t))
+        .or_else(|| plus::apply(id, &t))
         .unwrap_or_else(|| paint(t.w, t.h, |x, y| mix(t.sa(x, y), t.sb(x, y), p)))
 }
 

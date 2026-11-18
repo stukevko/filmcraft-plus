@@ -70,6 +70,79 @@ pub enum CaptionAnchor {
     Bottom,
 }
 
+/// How the words of a caption appear while it shows (FilmCraft Plus animated captions for short
+/// vertical video). The timing comes from [`Caption::words`]; a caption without word times
+/// spreads its words evenly over its duration.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CaptionAnimation {
+    /// Static captions (the whole block shows at once).
+    #[default]
+    None,
+    /// Words pop in as they are spoken; the spoken word is highlighted and slightly larger.
+    Pop,
+    /// All words show; a rounded box in the highlight colour glides to the spoken word.
+    Box,
+    /// One big word at a time, popping in.
+    OneWord,
+    /// Words start dim and fill with the highlight colour from left to right as they are spoken.
+    Karaoke,
+    /// Words rise into place and fade in; no highlight.
+    Rise,
+    /// Every word on its own tile (text in the highlight colour's contrast), stacked as spoken.
+    Tiles,
+}
+
+impl CaptionAnimation {
+    pub const ALL: [CaptionAnimation; 7] = [
+        CaptionAnimation::None,
+        CaptionAnimation::Pop,
+        CaptionAnimation::Box,
+        CaptionAnimation::OneWord,
+        CaptionAnimation::Karaoke,
+        CaptionAnimation::Rise,
+        CaptionAnimation::Tiles,
+    ];
+    pub fn label(self) -> &'static str {
+        match self {
+            CaptionAnimation::None => "None",
+            CaptionAnimation::Pop => "Pop",
+            CaptionAnimation::Box => "Box",
+            CaptionAnimation::OneWord => "One Word",
+            CaptionAnimation::Karaoke => "Karaoke",
+            CaptionAnimation::Rise => "Rise",
+            CaptionAnimation::Tiles => "Tiles",
+        }
+    }
+    pub fn from_name(s: &str) -> Option<CaptionAnimation> {
+        let n = s.to_ascii_lowercase().replace(['-', ' ', '_'], "");
+        Self::ALL.iter().copied().find(|a| a.label().to_ascii_lowercase().replace(' ', "") == n)
+    }
+    fn is_none(&self) -> bool {
+        *self == CaptionAnimation::None
+    }
+}
+
+/// One word of a caption with its time, for animated captions.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CaptionWord {
+    pub text: String,
+    /// When the word starts being spoken, from the caption's start.
+    pub start: Tick,
+    /// When it ends, from the caption's start.
+    pub end: Tick,
+}
+
+const DEFAULT_HIGHLIGHT: [u8; 4] = [255, 225, 77, 255];
+fn is_default_highlight(c: &[u8; 4]) -> bool {
+    *c == DEFAULT_HIGHLIGHT
+}
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+fn is_zero(v: &f32) -> bool {
+    *v == 0.0
+}
+
 /// Track-level caption style (Premiere's caption track style / Essential Graphics text settings).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -96,6 +169,18 @@ pub struct CaptionStyle {
     /// Font style within the family (`Regular`, `Medium`, `SemiBold`, `Bold Italic`…), resolved
     /// like graphic text: the nearest weight when the family has no face of that name.
     pub font_style: String,
+    /// Word animation (FilmCraft Plus).
+    #[serde(skip_serializing_if = "CaptionAnimation::is_none")]
+    pub animation: CaptionAnimation,
+    /// Colour of the spoken word (or its box / tile), sRGB + alpha.
+    #[serde(skip_serializing_if = "is_default_highlight")]
+    pub highlight_color: [u8; 4],
+    /// Draw the text in capitals.
+    #[serde(skip_serializing_if = "is_false")]
+    pub uppercase: bool,
+    /// Soft drop shadow strength 0..1 (0 = none).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub shadow: f32,
 }
 
 impl Default for CaptionStyle {
@@ -113,7 +198,66 @@ impl Default for CaptionStyle {
             outline: 0.0,
             outline_color: [0, 0, 0, 255],
             font_style: "SemiBold".into(),
+            animation: CaptionAnimation::None,
+            highlight_color: DEFAULT_HIGHLIGHT,
+            uppercase: false,
+            shadow: 0.0,
         }
+    }
+}
+
+/// The animated caption looks (FilmCraft Plus), for [`CaptionStyle::look`].
+pub const CAPTION_LOOKS: &[&str] = &["Punch", "Spotlight", "One Word", "Karaoke", "Rise", "Tiles"];
+
+impl CaptionStyle {
+    /// A ready-made animated caption look by name (see [`CAPTION_LOOKS`]; case, spaces and dashes
+    /// are ignored). Sizes are for a 1080-line picture and follow the frame's area.
+    pub fn look(name: &str) -> Option<CaptionStyle> {
+        let n = name.to_ascii_lowercase().replace([' ', '-', '_'], "");
+        let base = CaptionStyle {
+            font_style: "Bold".into(),
+            background: false,
+            anchor: CaptionAnchor::Bottom,
+            margin: 0.24,
+            line_spacing: 1.15,
+            uppercase: true,
+            ..Default::default()
+        };
+        Some(match n.as_str() {
+            // white capitals, the spoken word pops in yellow
+            "punch" => CaptionStyle { animation: CaptionAnimation::Pop, size: 100.0, outline: 7.0, shadow: 0.6, ..base },
+            // a violet box glides from word to word
+            "spotlight" => {
+                CaptionStyle { animation: CaptionAnimation::Box, size: 90.0, outline: 0.0, shadow: 0.8, highlight_color: [124, 58, 237, 255], ..base }
+            }
+            // one big word at a time
+            "oneword" => CaptionStyle { animation: CaptionAnimation::OneWord, size: 165.0, outline: 9.0, shadow: 0.7, margin: 0.3, ..base },
+            // words fill with mint green as they are spoken
+            "karaoke" => {
+                CaptionStyle { animation: CaptionAnimation::Karaoke, size: 92.0, outline: 6.0, shadow: 0.5, highlight_color: [61, 255, 180, 255], ..base }
+            }
+            // quiet: mixed case, words rise in, soft shadow only
+            "rise" => CaptionStyle {
+                animation: CaptionAnimation::Rise,
+                size: 80.0,
+                outline: 0.0,
+                shadow: 1.0,
+                uppercase: false,
+                font_style: "SemiBold".into(),
+                ..base
+            },
+            // black capitals on white tiles
+            "tiles" => CaptionStyle {
+                animation: CaptionAnimation::Tiles,
+                size: 82.0,
+                outline: 0.0,
+                shadow: 0.6,
+                color: [12, 12, 12, 255],
+                highlight_color: [245, 245, 245, 255],
+                ..base
+            },
+            _ => return None,
+        })
     }
 }
 
@@ -135,6 +279,9 @@ pub struct Caption {
     /// WebVTT cue settings (`line:90% align:start`…), kept verbatim.
     #[serde(default)]
     pub settings: String,
+    /// The words with their times, for animated captions (empty for ordinary captions).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub words: Vec<CaptionWord>,
 }
 
 impl Caption {
@@ -344,6 +491,7 @@ mod tests {
                 speaker: None,
                 cue_id: None,
                 settings: String::new(),
+                words: Vec::new(),
             });
         }
         assert_eq!(t.caption_at(Tick(120)).unwrap().text, "c1");
@@ -365,6 +513,7 @@ mod tests {
                 speaker: None,
                 cue_id: None,
                 settings: String::new(),
+                words: Vec::new(),
             });
         }
         let result = std::panic::catch_unwind(|| track.check());

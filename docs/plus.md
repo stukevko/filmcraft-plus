@@ -164,6 +164,72 @@ heruntergeladen. Danach **Sequenz ▸ Transkript ▸ Untertitel aus Transkript e
 korrigieren und über **Datei ▸ Exportieren ▸ Untertitel…** als SRT für YouTube speichern. Über das Transkript kannst du
 auch Text-basiert schneiden, Pausen und Füllwörter („äh“, „ähm“) entfernen.
 
+## Reels & TikTok
+
+### Animierte Untertitel (ein Klick)
+
+**Sequenz ▸ Animierte Untertitel** und einen Look wählen. FilmCraft Plus hört sich an, was du im
+Video sagst, schreibt es mit und legt daraus eine Untertitelspur an, bei der jedes Wort genau
+dann erscheint, wenn du es sprichst. Kurze Zeilen, groß, mittig im unteren Drittel, passend für
+Hochformat (im Querformat werden die Zeilen automatisch länger).
+
+| Look | Wirkung |
+|---|---|
+| **Punch (gelber Pop)** | Wörter springen einzeln rein, das aktuelle Wort gelb und etwas größer |
+| **Spotlight (gleitende Box)** | Farbige Box gleitet von Wort zu Wort |
+| **Ein Wort** | Immer nur ein Wort, sehr groß, mit Pop |
+| **Karaoke (Farbfüllung)** | Zeile steht, die Farbe läuft beim Sprechen durch |
+| **Rise (minimal)** | Ruhig: Wörter steigen weich ein, ohne Kontur |
+| **Kacheln** | Jedes Wort auf einer eigenen hellen Kachel |
+
+- Beim **ersten Mal** wird das Sprachmodell einmalig heruntergeladen (Internet nötig, dauert
+  einen Moment); die Erkennung selbst blockiert die App kurz, je nach Länge des Videos.
+- Anderen Look ausprobieren: einfach einen anderen Look wählen. Deine Textkorrekturen bleiben.
+- Falsch verstandenes Wort: den Untertitel wie jeden anderen bearbeiten und korrigieren.
+- Schnitt geändert? **Aus Transkript neu erstellen** baut die Spur passend zum neuen Schnitt.
+- Farbe, Schrift, Größe und Position änderst du wie bei jeder Untertitelspur.
+
+### Übergänge (Effekte ▸ FilmCraft Plus ▸ Übergänge)
+
+Auf den Schnitt zwischen zwei Clips ziehen, Länge wie gewohnt am Rand ziehen.
+
+- **Block-Aufbau:** Das neue Bild baut sich Block für Block auf, wie die Hochhäuser im
+  AVKO-Logo. Reihenfolge wählbar (Türme aufwärts/abwärts, von links/rechts, zufällig).
+- **Reißschwenk:** Schneller Kameraschwenk mit Schliere, leichter Neigung und Farbsaum.
+- **Durchschlag-Zoom:** Zoom durch das Bild mit Drehung, Farbversatz und kurzem Blitz.
+- **Glitch-Schnitt:** Das Bild reißt in Streifen und springt streifenweise zum neuen Clip.
+
+Tipp für Musikvideos: Übergang auf 8 bis 12 Bilder kürzen und genau auf einen Beat-Marker legen.
+
+### Studiolicht (Effekte ▸ FilmCraft Plus ▸ Porträt)
+
+Auf den Clip ziehen, fertig. Der Effekt findet dein Gesicht, belichtet darauf, setzt ein weiches
+Führungslicht, hellt Schatten auf, nimmt den Hintergrund etwas zurück und glättet die Haut.
+
+- **Licht-Setup:** Weiches Führungslicht, Beauty, Dramatisch, Hell & klar, Warmer Abend oder
+  Eigenes (dann gelten die Regler unter „Eigenes Licht“).
+- **Stärke** regelt alles zusammen. **Automatische Belichtung (Gesicht)** gleicht zu dunkle oder
+  zu helle Aufnahmen aus.
+- **Licht anzeigen** zeigt in Gelb, wohin das Licht fällt.
+
+### Autofokus (Effekte ▸ FilmCraft Plus ▸ Porträt)
+
+Hält dich scharf und zeichnet den Rest weich (gaußscher Weichzeichner), der Fokus folgt deinem
+Gesicht von selbst.
+
+- **Hintergrund-Unschärfe:** wie stark. **Fokusbereich:** wie groß der scharfe Bereich ist.
+  **Übergang:** wie weich es von scharf nach unscharf geht.
+- **Körper scharf lassen:** an = Kopf, Schultern und Oberkörper; aus = nur der Kopf.
+- **Fokusbereich anzeigen** färbt alles rot, was unscharf wird (zum Einstellen).
+- Wird kurz kein Gesicht gefunden (wegdrehen, Hand davor), bleibt der Fokus stehen und kehrt
+  weich zurück. Ganz ohne Gesicht gilt **Manueller Punkt**.
+
+Gut zu wissen: Gefunden werden Gesichter, die ungefähr zur Kamera schauen. Der scharfe Bereich
+ist eine weiche Kopf-und-Schultern-Form, kein pixelgenaues Freistellen. Bei sehr starker
+Unschärfe sieht man das an Haaren und Händen, die aus der Form ragen; dann den Fokusbereich
+größer oder den Übergang weicher stellen. Beide Effekte am besten direkt auf den Clip legen
+(nicht auf eine Einstellungsebene), dann läuft die Verfolgung ruhig.
+
 ## Optimierungen für deinen PC
 
 - **CPU:** Der Build ist für Arrow Lake-S kompiliert (`target-cpu=arrowlake-s`: AVX2, FMA,
@@ -190,6 +256,10 @@ auch Text-basiert schneiden, Pausen und Füllwörter („äh“, „ähm“) ent
   vielen Effekten **1/2** für flüssige Vorschau, der Export rendert immer in voller Qualität.
 
 ## Rechtliches
+
+Die Gesichtserkennung nutzt die frei lizenzierten Trainingsdaten des OpenCV-Projekts
+(`assets/models/lbpcascade_frontalface.xml`, Apache-2.0, siehe `ATTRIBUTION.md`); ausgewertet werden
+sie von eigenem Code.
 
 Die Effekte, Vorgaben und Looks sind eigene Arbeit dieses Forks. Sie sind von der *Art* von
 Werkzeugen bekannter Plugins inspiriert, enthalten aber keinen fremden Code, keine fremden

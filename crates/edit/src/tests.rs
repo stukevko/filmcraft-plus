@@ -300,6 +300,7 @@ fn ripple_delete_sync_locked_caption_tracks() {
         speaker: None,
         cue_id: None,
         settings: String::new(),
+        words: Vec::new(),
     });
     fx.seq.caption_track_mut(c_unsynced).unwrap().captions.push(Caption {
         id: ClipId(50002),
@@ -309,6 +310,7 @@ fn ripple_delete_sync_locked_caption_tracks() {
         speaker: None,
         cue_id: None,
         settings: String::new(),
+        words: Vec::new(),
     });
 
     let _v0 = fx.put(v1, 0, 10, 0);
@@ -1381,6 +1383,7 @@ fn trim_caption_shorter_than_min_duration_does_not_cross_bounds() {
                 speaker: None,
                 cue_id: None,
                 settings: String::new(),
+                words: Vec::new(),
             });
         }
         fx.seq.caption_tracks.push(tr);

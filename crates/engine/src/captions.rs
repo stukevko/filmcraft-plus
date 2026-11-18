@@ -255,6 +255,7 @@ fn track_json(s: &Session, t: &CaptionTrack, index: usize) -> Value {
             "align": format!("{:?}", t.style.align).to_lowercase(), "anchor": format!("{:?}", t.style.anchor).to_lowercase(),
             "margin": t.style.margin, "lineSpacing": t.style.line_spacing, "outline": t.style.outline, "outlineColor": hex(t.style.outline_color),
             "fontStyle": t.style.font_style,
+            "animation": t.style.animation.label(), "highlightColor": hex(t.style.highlight_color), "uppercase": t.style.uppercase, "shadow": t.style.shadow,
         },
         "captions": t.captions.iter().map(|c| caption_json(s, c)).collect::<Vec<_>>(),
     })
@@ -361,7 +362,7 @@ pub fn commands() -> Vec<CommandSpec> {
             "Caption Track Style",
             &[],
             None,
-            r##"{"track":id|"C1","font":str?,"fontStyle":str="SemiBold" (Regular, Medium, Bold…)?,"size":f32?,"color":"#rrggbb[aa]"?,"background":bool?,"backgroundColor":"#rrggbbaa"?,"align":"left|center|right"?,"anchor":"top|middle|bottom"?,"margin":0..0.45 (fraction of frame height)?,"lineSpacing":f32?,"outline":f32?,"outlineColor":str?,"reset":bool?}"##,
+            r##"{"track":id|"C1","font":str?,"fontStyle":str="SemiBold" (Regular, Medium, Bold…)?,"size":f32?,"color":"#rrggbb[aa]"?,"background":bool?,"backgroundColor":"#rrggbbaa"?,"align":"left|center|right"?,"anchor":"top|middle|bottom"?,"margin":0..0.45 (fraction of frame height)?,"lineSpacing":f32?,"outline":f32?,"outlineColor":str?,"animation":"None|Pop|Box|One Word|Karaoke|Rise|Tiles"?,"highlightColor":str?,"uppercase":bool?,"shadow":0..1?,"reset":bool?}"##,
             has_caption_track,
             |s, p| {
                 let tid = track_param(s, p).ok_or_else(|| {
@@ -407,6 +408,20 @@ pub fn commands() -> Vec<CommandSpec> {
                     }
                     if let Some(v) = f64_p(&p, "margin") {
                         y.margin = (v as f32).clamp(0.0, 0.45);
+                    }
+                    // FilmCraft Plus: animated captions
+                    if let Some(v) = str_p(&p, "animation") {
+                        y.animation =
+                            filmcraft_project::CaptionAnimation::from_name(v).ok_or_else(|| bad("captions.setStyle", format!("unknown animation `{v}`")))?;
+                    }
+                    if let Some(c) = p.get("highlightColor").and_then(parse_color) {
+                        y.highlight_color = c;
+                    }
+                    if let Some(b) = bool_p(&p, "uppercase") {
+                        y.uppercase = b;
+                    }
+                    if let Some(v) = f64_p(&p, "shadow") {
+                        y.shadow = (v as f32).clamp(0.0, 1.0);
                     }
                     if let Some(v) = f64_p(&p, "lineSpacing") {
                         y.line_spacing = (v as f32).clamp(0.8, 4.0);

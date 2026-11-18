@@ -14,9 +14,9 @@ use filmcraft_text::{ParagraphStyle, TextStyle, layout, render};
 
 /// Caption overlays are transient render resources, not source images. Keep one cue from
 /// materialising an unbounded mask or RGBA buffer.
-const MAX_OVERLAY_PIXELS: usize = 16 << 20;
-const MAX_CAPTION_SIZE_1080: f32 = 256.0;
-const MAX_OUTLINE_RADIUS: f32 = 64.0;
+pub(crate) const MAX_OVERLAY_PIXELS: usize = 16 << 20;
+pub(crate) const MAX_CAPTION_SIZE_1080: f32 = 256.0;
+pub(crate) const MAX_OUTLINE_RADIUS: f32 = 64.0;
 
 /// A rendered caption: premultiplied linear-light RGBA f32 pixels at `(x, y)` in the frame.
 #[derive(Clone, Debug, PartialEq)]
@@ -57,13 +57,13 @@ impl Overlay {
 
 /// The caption face: the track's font family (Inter when empty or not installed) in the track's
 /// font style (SemiBold when empty) at `px`.
-fn caption_style(font: &str, font_style: &str, px: f32) -> TextStyle {
+pub(crate) fn caption_style(font: &str, font_style: &str, px: f32) -> TextStyle {
     let family = if font.trim().is_empty() { filmcraft_text::fonts::DEFAULT_FAMILY } else { font.trim() };
     let style = if font_style.trim().is_empty() { "SemiBold" } else { font_style.trim() };
     TextStyle { family: family.into(), style: style.into(), size: px, ..Default::default() }
 }
 
-fn lin(c: [u8; 4]) -> [f32; 4] {
+pub(crate) fn lin(c: [u8; 4]) -> [f32; 4] {
     let a = c[3] as f32 / 255.0;
     [srgb_to_linear(c[0] as f32 / 255.0) * a, srgb_to_linear(c[1] as f32 / 255.0) * a, srgb_to_linear(c[2] as f32 / 255.0) * a, a]
 }
@@ -86,7 +86,7 @@ fn wrap(line: &str, ts: &TextStyle, max_w: f32) -> Vec<String> {
 }
 
 /// Placement overrides from WebVTT cue settings.
-fn vtt_overrides(settings: &str) -> (Option<f32>, Option<CaptionAlign>) {
+pub(crate) fn vtt_overrides(settings: &str) -> (Option<f32>, Option<CaptionAlign>) {
     let mut line = None;
     let mut align = None;
     for kv in settings.split_whitespace() {
@@ -219,7 +219,7 @@ pub fn render_caption(c: &Caption, style: &CaptionStyle, w: usize, h: usize) -> 
 }
 
 /// Max-filter a coverage mask with a disc of radius `r`.
-fn dilate(m: &[f32], w: usize, h: usize, r: f32) -> Vec<f32> {
+pub(crate) fn dilate(m: &[f32], w: usize, h: usize, r: f32) -> Vec<f32> {
     let ri = r.ceil() as i32;
     let mut offs = Vec::new();
     for dy in -ri..=ri {
@@ -252,6 +252,9 @@ pub fn track_overlay(track: &CaptionTrack, t: Tick, w: usize, h: usize) -> Optio
         return None;
     }
     let c = track.caption_at(t)?;
+    if track.style.animation != filmcraft_project::CaptionAnimation::None {
+        return crate::animate::render_animated(c, &track.style, t - c.start, w, h);
+    }
     render_caption(c, &track.style, w, h)
 }
 
@@ -266,7 +269,16 @@ mod tests {
     use filmcraft_project::{CaptionFormat, ClipId, TrackId};
 
     fn cap(text: &str) -> Caption {
-        Caption { id: ClipId(1), start: Tick(0), duration: Tick(100), text: text.into(), speaker: None, cue_id: None, settings: String::new() }
+        Caption {
+            id: ClipId(1),
+            start: Tick(0),
+            duration: Tick(100),
+            text: text.into(),
+            speaker: None,
+            cue_id: None,
+            settings: String::new(),
+            words: Vec::new(),
+        }
     }
 
     #[test]

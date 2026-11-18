@@ -41,6 +41,7 @@ pub mod panels;
 pub mod paste_media;
 pub mod perf;
 pub mod plus;
+pub mod plus_captions;
 pub mod presets;
 pub mod previews;
 pub mod project_manager;
@@ -1410,6 +1411,8 @@ mod par_tests;
 mod paste_media_tests;
 #[cfg(test)]
 mod place_items_tests;
+#[cfg(test)]
+mod plus_captions_tests;
 #[cfg(test)]
 mod plus_tests;
 #[cfg(test)]

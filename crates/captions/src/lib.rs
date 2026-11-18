@@ -17,6 +17,7 @@
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
+pub mod animate;
 pub mod burn;
 pub mod cea608;
 pub mod mcc;
@@ -389,6 +390,7 @@ pub fn track_from_document(doc: &Document, id: TrackId, name: &str, format: Capt
             speaker: c.speaker.clone(),
             cue_id: c.id.clone(),
             settings: c.settings.clone(),
+            words: Vec::new(),
         })
         .collect();
     t.sort();

@@ -854,7 +854,7 @@ fn scaled(l: Look, s: f32) -> Look {
 }
 
 /// Is this (display-space) colour in the skin-tone range? 0..1.
-fn skin_mask(d: [f32; 3]) -> f32 {
+pub(super) fn skin_mask(d: [f32; 3]) -> f32 {
     let (r, g, b) = (d[0], d[1], d[2]);
     let mx = r.max(g).max(b);
     let mn = r.min(g).min(b);
@@ -868,7 +868,7 @@ fn skin_mask(d: [f32; 3]) -> f32 {
 }
 
 /// Soft highlight compression: above the knee, values bend towards `top`.
-fn roll(d: f32, amt: f32) -> f32 {
+pub(super) fn roll(d: f32, amt: f32) -> f32 {
     if amt <= 1e-4 || d <= 0.6 {
         return d;
     }

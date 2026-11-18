@@ -422,7 +422,8 @@ mod tests {
             assert!(names.insert(d.name), "duplicate transition name {}", d.name);
             let ok = (d.category.len() == 2 && d.category[0] == "Video Transitions" && VIDEO_TRANSITION_FOLDERS.contains(&d.category[1]))
                 || d.category == LEGACY_VIDEO_TRANSITIONS
-                || d.category == OBSOLETE_VIDEO_TRANSITIONS;
+                || d.category == OBSOLETE_VIDEO_TRANSITIONS
+                || d.category == crate::effect::PLUS_TRANSITIONS;
             assert!(ok, "{} in {:?}", d.id, d.category);
             assert!(d.params.iter().all(|p| !p.animatable), "{}: transition params are not animatable", d.id);
         }

@@ -55,6 +55,7 @@ iconography, images or other Adobe assets; open licences only; every asset attri
 | `assets/app-icon/hicolor/512x512/apps/ai.storyteller.filmcraft.png` | Brandon Thomas (FilmCraft owner) | Original work: FilmCraft app icon (owl with ear tufts), drawn by the owner in ArtCraft and vectorised; Linux hicolor theme 512 px | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) |
 | `assets/app-icon/hicolor/scalable/apps/ai.storyteller.filmcraft.svg` | Brandon Thomas (FilmCraft owner) | Original work: FilmCraft app icon (owl with ear tufts), drawn by the owner in ArtCraft and vectorised; Linux hicolor theme scalable | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) |
 | `apps/filmcraft-web/web/favicon.png` | Brandon Thomas (FilmCraft owner) | Original work: FilmCraft app icon (owl with ear tufts), drawn by the owner in ArtCraft and vectorised; 128 px | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) |
+| `assets/models/lbpcascade_frontalface.xml` | OpenCV contributors (OpenCV team) | [opencv f4fa6371](https://github.com/opencv/opencv/blob/f4fa6371cb7e62db8271ba393e99ef5abcd6a2f3/data/lbpcascades/lbpcascade_frontalface.xml): trained LBP frontal face cascade (numbers only; evaluated by FilmCraft's own code in `crates/render/src/vfx/face.rs`), unmodified. Used by the FilmCraft Plus effects Auto Focus and Studio Light | Apache-2.0 (`LICENSE-APACHE`) |
 
 ## Golden test images
 

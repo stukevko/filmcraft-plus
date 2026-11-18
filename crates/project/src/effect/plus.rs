@@ -14,7 +14,7 @@
 //! but contain no third-party code, presets, LUTs or names. Pixel implementations live in
 //! `filmcraft_render::vfx::plus`.
 
-use super::{EffectDef, ParamDef, b, ch, col, fs, grp, video};
+use super::{EffectDef, EffectKind, ParamDef, b, ch, col, fs, grp, pt, video};
 
 /// Top-level Effects panel folder of the FilmCraft Plus effects.
 pub const PLUS_TOP: &str = "FilmCraft Plus";
@@ -22,6 +22,9 @@ const SHAKE: &[&str] = &[PLUS_TOP, "Shake & Motion"];
 const FLICKER: &[&str] = &[PLUS_TOP, "Flicker & Glitch"];
 const LOOKS: &[&str] = &[PLUS_TOP, "Looks"];
 const MUSIC: &[&str] = &[PLUS_TOP, "Music"];
+const PORTRAIT: &[&str] = &[PLUS_TOP, "Portrait"];
+/// Studio Light presets (index 0 = Custom).
+pub const STUDIO_PRESETS: &[&str] = &["Custom", "Soft Key", "Beauty", "Dramatic", "Clean Bright", "Warm Evening"];
 
 /// Music Sync: what the effect locks to. `Markers ▸ Sync Plus Effects to Music` fills in the
 /// tempo and the first beat from the selected music clip.
@@ -194,6 +197,51 @@ fn beat_pulse() -> EffectDef {
     video("beat_pulse", "Beat Pulse", MUSIC, ps)
 }
 
+/// The face-tracking group shared by the portrait effects.
+fn face_tracking() -> Vec<ParamDef> {
+    const G: &str = "Face Tracking";
+    vec![
+        grp(b("track", "Track Face", true), G),
+        grp(pct("smooth", "Tracking Smoothness", 50.0), G),
+        grp(pt("point", "Manual Point", f64::NAN, f64::NAN), G),
+        grp(fs("size", "Manual Face Size", 28.0, (2.0, 200.0), (5.0, 80.0), "%", 1), G),
+    ]
+}
+
+fn auto_focus() -> EffectDef {
+    let mut ps = vec![
+        pct("blur", "Background Blur", 45.0),
+        fs("area", "Focus Area", 100.0, (20.0, 500.0), (50.0, 250.0), "%", 1),
+        pct("feather", "Transition", 55.0),
+        b("body", "Keep Body Sharp", true),
+        pct("dim", "Darken Background", 0.0),
+    ];
+    ps.extend(face_tracking());
+    ps.push(b("show", "Show Focus Area", false));
+    video("auto_focus", "Auto Focus", PORTRAIT, ps)
+}
+
+fn studio_light() -> EffectDef {
+    const L: &str = "Custom Light";
+    let mut ps = vec![
+        ch("preset", "Light Setup", STUDIO_PRESETS, 1),
+        pct("strength", "Strength", 100.0),
+        b("auto", "Auto Exposure (Face)", true),
+        grp(pct("key", "Key Light", 45.0), L),
+        grp(fs("side", "Light Direction", -35.0, (-100.0, 100.0), (-100.0, 100.0), "", 1), L),
+        grp(fs("spread", "Light Size", 100.0, (30.0, 300.0), (30.0, 300.0), "%", 1), L),
+        grp(pct("fill", "Fill Light", 35.0), L),
+        grp(pct("background", "Background Dim", 25.0), L),
+        grp(pct("skin", "Skin Smoothing", 30.0), L),
+        grp(fs("warmth", "Warmth", 10.0, (-100.0, 100.0), (-100.0, 100.0), "", 1), L),
+        grp(pct("contrast", "Contrast", 10.0), L),
+        grp(pct("glow", "Soft Glow", 15.0), L),
+    ];
+    ps.extend(face_tracking());
+    ps.push(b("show", "Show Light", false));
+    video("studio_light", "Studio Light", PORTRAIT, ps)
+}
+
 /// The Plus effects that follow the music (they carry the Music Sync group).
 pub const MUSIC_SYNCED: &[&str] = &["organic_shake", "flicker_stack", "beat_pulse"];
 
@@ -245,13 +293,86 @@ fn avko_spectrum() -> EffectDef {
     )
 }
 
+/// Effects panel folder of the Plus transitions.
+pub const PLUS_TRANSITIONS: &[&str] = &[PLUS_TOP, "Transitions"];
+/// Block Build: the order the blocks appear in.
+pub const BLOCK_ORDERS: &[&str] = &["Towers Up", "Towers Down", "From Left", "From Right", "Random"];
+
+/// The four Plus transitions (pixels in `filmcraft_render::transitions::plus`). Transition
+/// parameters are not animatable.
+fn transitions() -> Vec<EffectDef> {
+    let tr = |id: &'static str, name: &'static str, params: Vec<ParamDef>| EffectDef {
+        id,
+        name,
+        kind: EffectKind::VideoTransition,
+        category: PLUS_TRANSITIONS,
+        params: params
+            .into_iter()
+            .map(|mut p| {
+                p.animatable = false;
+                p
+            })
+            .collect(),
+        intrinsic: false,
+        accelerated: false,
+        float32: true,
+        yuv: false,
+    };
+    let amount = |id: &'static str, label: &'static str, def: f64, max: f64| fs(id, label, def, (0.0, max), (0.0, max), "%", 1);
+    let rand = || fs("seed", "Random Seed", 1.0, (0.0, 9999.0), (0.0, 9999.0), "", 0);
+    vec![
+        tr(
+            "plus_block_build",
+            "Block Build",
+            vec![
+                fs("blocks", "Blocks Across", 14.0, (4.0, 48.0), (4.0, 48.0), "", 0),
+                ch("order", "Order", BLOCK_ORDERS, 0),
+                amount("gap", "Block Gap", 10.0, 60.0),
+                rand(),
+            ],
+        ),
+        tr(
+            "plus_whip",
+            "Whip Smear",
+            vec![
+                ch("direction", "Direction", crate::vtransition::DIR_OPTS, 3),
+                amount("amount", "Smear", 70.0, 200.0),
+                fs("tilt", "Camera Tilt", 6.0, (-30.0, 30.0), (-30.0, 30.0), "°", 1),
+                amount("rgb", "Colour Fringe", 40.0, 200.0),
+            ],
+        ),
+        tr(
+            "plus_punch",
+            "Punch Through",
+            vec![
+                amount("strength", "Strength", 70.0, 200.0),
+                amount("flash", "Flash", 50.0, 200.0),
+                amount("rgb", "Colour Split", 50.0, 200.0),
+                fs("spin", "Spin", 12.0, (-90.0, 90.0), (-90.0, 90.0), "°", 1),
+                pt("center", "Center", f64::NAN, f64::NAN),
+            ],
+        ),
+        tr(
+            "plus_glitch_slice",
+            "Glitch Slice",
+            vec![
+                fs("slices", "Slices", 18.0, (4.0, 60.0), (4.0, 60.0), "", 0),
+                amount("amount", "Tear", 60.0, 200.0),
+                amount("rgb", "Colour Fringe", 60.0, 200.0),
+                rand(),
+            ],
+        ),
+    ]
+}
+
 pub(super) fn defs() -> Vec<EffectDef> {
-    let mut v = vec![organic_shake(), flicker_stack(), look_builder(), beat_pulse(), avko_spectrum()];
+    let mut v = vec![organic_shake(), flicker_stack(), look_builder(), beat_pulse(), avko_spectrum(), auto_focus(), studio_light()];
     for d in &mut v {
         d.accelerated = false;
         d.float32 = true;
         d.yuv = false;
     }
+    v.extend(transitions());
     v
 }
 
@@ -261,7 +382,7 @@ mod tests {
 
     #[test]
     fn plus_effects_are_registered_in_their_folder() {
-        for id in ["organic_shake", "flicker_stack", "look_builder", "beat_pulse", "avko_spectrum"] {
+        for id in ["organic_shake", "flicker_stack", "look_builder", "beat_pulse", "avko_spectrum", "auto_focus", "studio_light"] {
             let d = find_effect(id).unwrap_or_else(|| panic!("missing {id}"));
             assert_eq!(d.category.first(), Some(&super::PLUS_TOP), "{id}");
             // every parameter id is unique

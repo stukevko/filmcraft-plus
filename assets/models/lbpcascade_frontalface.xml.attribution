@@ -1,0 +1,8 @@
+asset:        lbpcascade_frontalface.xml
+title:        LBP frontal face cascade (face finding for Auto Focus and Studio Light)
+author:       OpenCV contributors (OpenCV team)
+source:       https://github.com/opencv/opencv/blob/4.x/data/lbpcascades/lbpcascade_frontalface.xml (commit f4fa6371cb7e62db8271ba393e99ef5abcd6a2f3)
+license:      Apache-2.0
+license-file: LICENSE-APACHE (Apache License 2.0, the licence of the OpenCV repository at that commit)
+added:        2026-11-18 by Claude (agent) for stukevko (FilmCraft Plus)
+notes:        Unmodified trained classifier data (stage thresholds, LBP feature rectangles and lookup tables), embedded with include_str! and evaluated by FilmCraft's own detector (crates/render/src/vfx/face.rs). No OpenCV code is used.

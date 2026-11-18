@@ -19,6 +19,7 @@ pub(crate) use color::cdl;
 mod avko;
 mod beat;
 mod distort;
+mod draw;
 pub mod face;
 pub(crate) mod follow;
 mod immersive;
@@ -590,6 +591,8 @@ pub fn apply(img: &mut Image, e: &EffectInstance, cx: &FxCtx) -> bool {
         "avko_spectrum" => avko::avko_spectrum(img, e, cx),
         // moves the placed layer instead of its pixels (see `inout::placement`)
         inout::ID | follow::ID => {}
+        "draw_on" => draw::draw_on(img, e, cx),
+        "marker" => draw::marker(img, e, cx),
         "auto_focus" => portrait::auto_focus(img, e, cx),
         "studio_light" => portrait::studio_light(img, e, cx),
         id if id.starts_with("vr_") => immersive::apply(img, e, cx),

@@ -24,6 +24,13 @@ const LOOKS: &[&str] = &[PLUS_TOP, "Looks"];
 const MUSIC: &[&str] = &[PLUS_TOP, "Music"];
 const PORTRAIT: &[&str] = &[PLUS_TOP, "Portrait"];
 const REELS: &[&str] = &[PLUS_TOP, "Reels & Shorts"];
+const ANIMATION: &[&str] = &[PLUS_TOP, "Animation"];
+/// Draw On: how the lines of the picture are found.
+pub const INK_KINDS: &[&str] = &["Auto", "Transparency", "Dark Lines", "Light Lines"];
+/// Draw On: where the drawing starts.
+pub const DRAW_DIRECTIONS: &[&str] = &["Left to Right", "Top to Bottom", "From the Middle"];
+/// Marker shapes.
+pub const MARKER_SHAPES: &[&str] = &["Arrow", "Circle", "Underline", "Box", "Cross", "Tick"];
 /// Animate In / Out styles.
 pub const INOUT_STYLES: &[&str] = &["Pop", "Slide Up", "Slide Down", "Slide from Left", "Slide from Right", "Zoom", "Spin", "Fade"];
 /// Studio Light presets (index 0 = Custom).
@@ -219,6 +226,49 @@ fn animate_in_out() -> EffectDef {
     )
 }
 
+/// The timing shared by the animation effects: they start with the clip.
+fn drawing_time(duration: f64) -> Vec<ParamDef> {
+    vec![
+        fs("duration", "Draw Duration", duration, (0.0, 3600.0), (0.0, 5.0), "s", 2),
+        fs("delay", "Start Delay", 0.0, (0.0, 3600.0), (0.0, 5.0), "s", 2),
+        b("erase", "Erase at the End", false),
+    ]
+}
+
+/// Draw On: a sketch, a logo or any line art draws itself.
+fn draw_on() -> EffectDef {
+    let mut ps = drawing_time(1.5);
+    ps.extend([
+        ch("direction", "Start", DRAW_DIRECTIONS, 0),
+        b("remove_paper", "Remove Paper", false),
+        ch("ink", "Lines Are", INK_KINDS, 0),
+        pct("sensitivity", "Line Sensitivity", 50.0),
+        pct("softness", "Pen Softness", 30.0),
+        b("tint", "Recolour Lines", false),
+        col("color", "Line Colour", [1.0, 1.0, 1.0, 1.0]),
+    ]);
+    video("draw_on", "Draw On", ANIMATION, ps)
+}
+
+/// Marker: a hand-drawn arrow, circle, underline, box, cross or tick.
+fn marker() -> EffectDef {
+    let mut ps = vec![
+        ch("shape", "Shape", MARKER_SHAPES, 0),
+        pt("from", "From", f64::NAN, f64::NAN),
+        pt("to", "To", f64::NAN, f64::NAN),
+        col("color", "Colour", [1.0, 0.85, 0.2, 1.0]),
+    ];
+    ps.push(fs("thickness", "Thickness", 12.0, (0.5, 200.0), (2.0, 40.0), "px", 1));
+    ps.extend(drawing_time(0.5));
+    ps.extend([
+        fs("curve", "Curve", 15.0, (-100.0, 100.0), (-100.0, 100.0), "%", 0),
+        pct("wobble", "Hand-Drawn", 40.0),
+        pct("opacity", "Opacity", 100.0),
+        fs("seed", "Variation", 1.0, (0.0, 1000.0), (0.0, 100.0), "", 0),
+    ]);
+    video("marker", "Marker", ANIMATION, ps)
+}
+
 /// Face Follow: the clip fills the frame and pans so the face stays in it (the compositor moves
 /// the placed layer; see `filmcraft_render`).
 fn face_follow() -> EffectDef {
@@ -406,8 +456,19 @@ fn transitions() -> Vec<EffectDef> {
 }
 
 pub(super) fn defs() -> Vec<EffectDef> {
-    let mut v =
-        vec![organic_shake(), flicker_stack(), look_builder(), beat_pulse(), avko_spectrum(), auto_focus(), studio_light(), animate_in_out(), face_follow()];
+    let mut v = vec![
+        organic_shake(),
+        flicker_stack(),
+        look_builder(),
+        beat_pulse(),
+        avko_spectrum(),
+        auto_focus(),
+        studio_light(),
+        animate_in_out(),
+        face_follow(),
+        draw_on(),
+        marker(),
+    ];
     for d in &mut v {
         d.accelerated = false;
         d.float32 = true;
@@ -423,9 +484,19 @@ mod tests {
 
     #[test]
     fn plus_effects_are_registered_in_their_folder() {
-        for id in
-            ["organic_shake", "flicker_stack", "look_builder", "beat_pulse", "avko_spectrum", "auto_focus", "studio_light", "animate_in_out", "face_follow"]
-        {
+        for id in [
+            "organic_shake",
+            "flicker_stack",
+            "look_builder",
+            "beat_pulse",
+            "avko_spectrum",
+            "auto_focus",
+            "studio_light",
+            "animate_in_out",
+            "face_follow",
+            "draw_on",
+            "marker",
+        ] {
             let d = find_effect(id).unwrap_or_else(|| panic!("missing {id}"));
             assert_eq!(d.category.first(), Some(&super::PLUS_TOP), "{id}");
             // every parameter id is unique

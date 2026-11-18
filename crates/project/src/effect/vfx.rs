@@ -77,6 +77,9 @@ pub fn auto_point(effect: &str, param: &str) -> Option<(f64, f64)> {
         ("four_color_gradient", "p4") => (0.75, 0.75),
         // FilmCraft Plus portrait effects: where a face usually is
         ("auto_focus" | "studio_light", "point") => (0.5, 0.38),
+        // FilmCraft Plus Marker: a stroke across the lower middle
+        ("marker", "from") => (0.3, 0.65),
+        ("marker", "to") => (0.7, 0.45),
         _ => return None,
     })
 }

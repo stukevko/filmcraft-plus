@@ -291,6 +291,40 @@ Unschärfe sieht man das an Haaren und Händen, die aus der Form ragen; dann den
 größer oder den Übergang weicher stellen. Beide Effekte am besten direkt auf den Clip legen
 (nicht auf eine Einstellungsebene), dann läuft die Verfolgung ruhig.
 
+## Animation (Effekte ▸ FilmCraft Plus ▸ Animation)
+
+### Selbst zeichnen
+
+Eine Skizze, ein Logo oder jede Strichzeichnung **zeichnet sich von selbst** ins Bild. Bild
+(PNG, JPG, auch ein Handyfoto von einer Bleistiftskizze) auf eine Spur über dein Video legen
+und **Selbst zeichnen** draufziehen. Die Animation startet mit dem Clip.
+
+- Die Linien werden automatisch erkannt: über Transparenz (PNG-Logo), als dunkle Linien auf
+  hellem Papier oder helle Linien auf dunklem Grund. Gezeichnet wird **entlang der Linien**,
+  eine nach der anderen, wie mit einem Stift.
+- **Papier entfernen:** Der Hintergrund der Skizze verschwindet, nur die Linien liegen über
+  deinem Video.
+- **Linien umfärben** + **Linienfarbe:** zum Beispiel weiße Linien über dunklem Video.
+- **Zeichendauer**, **Startverzögerung**, **Start** (von links, von oben, von der Mitte aus).
+- **Am Ende wegradieren:** Die Zeichnung verschwindet vor Clip-Ende in derselben Reihenfolge.
+- Werden feine Bleistiftlinien nicht erkannt: **Linien-Empfindlichkeit** erhöhen.
+
+Am besten für Standbilder. Bei bewegtem Video ändert sich die Zeichenreihenfolge von Bild zu
+Bild und es flackert.
+
+### Markierung
+
+Handgezeichnete **Pfeile, Kreise, Unterstreichungen, Kästen, Kreuze und Haken**, die sich über
+dem Bild zeichnen. Effekt auf den Clip ziehen (oder auf ein **Transparentes Video** über
+mehreren Clips), **Form** wählen und die Punkte **Von** und **Bis** im Programmmonitor setzen.
+
+- Pfeil und Unterstreichung laufen von **Von** nach **Bis**; Kreis, Kasten, Kreuz und Haken
+  füllen das Rechteck zwischen den beiden Punkten.
+- **Farbe**, **Dicke**, **Krümmung** (Bogen beim Pfeil), **Handgezeichnet** (wie unruhig die
+  Linie ist), **Variante** (andere Handschrift).
+- **Zeichendauer** und **Startverzögerung**: mehrere Markierungen nacheinander erscheinen
+  lassen, indem du den Effekt mehrfach mit unterschiedlicher Verzögerung auflegst.
+
 ## Optimierungen für deinen PC
 
 - **CPU:** Der Build ist für Arrow Lake-S kompiliert (`target-cpu=arrowlake-s`: AVX2, FMA,

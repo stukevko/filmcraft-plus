@@ -325,6 +325,27 @@ mehreren Clips), **Form** wählen und die Punkte **Von** und **Bis** im Programm
 - **Zeichendauer** und **Startverzögerung**: mehrere Markierungen nacheinander erscheinen
   lassen, indem du den Effekt mehrfach mit unterschiedlicher Verzögerung auflegst.
 
+### Diagramm
+
+Ein animiertes **Balken-, Linien-, Kreis- oder Ringdiagramm** aus Zahlen, die du eintippst.
+Effekt auf den Clip ziehen (oder auf ein **Transparentes Video**, dann ist das Diagramm eine
+eigene Ebene, die du mit „Rein- & Rausanimieren“ kombinieren kannst).
+
+- **Werte:** eine Zeile Text, Einträge mit Semikolon getrennt: `Jan 12; Feb 18; Mär 9`.
+  Die letzte Zahl eines Eintrags ist der Wert, davor steht die Beschriftung. Kommazahlen wie
+  `450,50` gehen, solange du mit Semikolon trennst. Höchstens 24 Einträge.
+- **Diagramm:** Balken, Balken quer, Linie, Kreis, Ring.
+- Die Animation startet mit dem Clip: Balken fahren nacheinander hoch und die Zahlen zählen
+  mit, die Linie zeichnet sich von links nach rechts, Kreis und Ring füllen sich im
+  Uhrzeigersinn (dort stehen Prozentanteile in der Legende).
+- **Titel**, **Einheit** (z. B. `%`, `€`, `kg`), **Werte anzeigen**.
+- **Farben:** AVKO, Eine Farbe, Neon, Pastell, Abstufungen; dazu **Textfarbe**.
+- **Position**, **Größe**, **Hintergrundfläche** (dunkle Fläche hinter dem Diagramm, damit es
+  über Video lesbar bleibt), **Zeichendauer**, **Startverzögerung**, **Am Ende wegradieren**
+  (blendet aus).
+
+Das Diagramm zeigt nur, was du eintippst; es liest keine Daten aus Dateien oder aus dem Bild.
+
 ## Optimierungen für deinen PC
 
 - **CPU:** Der Build ist für Arrow Lake-S kompiliert (`target-cpu=arrowlake-s`: AVX2, FMA,

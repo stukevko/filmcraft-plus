@@ -18,6 +18,7 @@ mod color;
 pub(crate) use color::cdl;
 mod avko;
 mod beat;
+mod chart;
 mod distort;
 mod draw;
 pub mod face;
@@ -593,6 +594,7 @@ pub fn apply(img: &mut Image, e: &EffectInstance, cx: &FxCtx) -> bool {
         inout::ID | follow::ID => {}
         "draw_on" => draw::draw_on(img, e, cx),
         "marker" => draw::marker(img, e, cx),
+        "chart" => chart::chart(img, e, cx),
         "auto_focus" => portrait::auto_focus(img, e, cx),
         "studio_light" => portrait::studio_light(img, e, cx),
         id if id.starts_with("vr_") => immersive::apply(img, e, cx),

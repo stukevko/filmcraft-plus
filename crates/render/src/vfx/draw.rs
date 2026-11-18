@@ -28,7 +28,7 @@ fn finite_or(v: f32, d: f32) -> f32 {
 }
 
 /// How much is drawn (0..1) and how much is taken away again (0..1) at the clip's current time.
-fn progress(e: &EffectInstance, cx: &FxCtx) -> (f32, f32) {
+pub(super) fn progress(e: &EffectInstance, cx: &FxCtx) -> (f32, f32) {
     let now = if cx.seconds.is_finite() { cx.seconds.max(0.0) } else { 0.0 };
     let delay = f64::from(finite_or(fv(e, "delay", cx), 0.0).clamp(0.0, 3600.0));
     let dur = f64::from(finite_or(fv(e, "duration", cx), 1.0).clamp(0.0, 3600.0));
@@ -468,7 +468,7 @@ pub fn marker(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
 }
 
 /// Add a round-ended line from `a` to `b` of radius `r` to a coverage mask (the strongest wins).
-fn stamp(cover: &mut [f32], w: usize, h: usize, a: Vec2, b: Vec2, r: f32) {
+pub(super) fn stamp(cover: &mut [f32], w: usize, h: usize, a: Vec2, b: Vec2, r: f32) {
     let pad = f64::from(r) + 1.5;
     let (x0, x1) = (((a.x.min(b.x) - pad).floor().max(0.0)) as usize, ((a.x.max(b.x) + pad).ceil().min(w as f64 - 1.0)).max(0.0) as usize);
     let (y0, y1) = (((a.y.min(b.y) - pad).floor().max(0.0)) as usize, ((a.y.max(b.y) + pad).ceil().min(h as f64 - 1.0)).max(0.0) as usize);

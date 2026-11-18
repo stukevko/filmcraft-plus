@@ -14,7 +14,8 @@
 //! but contain no third-party code, presets, LUTs or names. Pixel implementations live in
 //! `filmcraft_render::vfx::plus`.
 
-use super::{EffectDef, EffectKind, ParamDef, b, ch, col, fs, grp, pt, video};
+use super::{EffectDef, EffectKind, ParamDef, b, ch, col, fs, grp, pt, txt, video};
+use crate::ParamValue;
 
 /// Top-level Effects panel folder of the FilmCraft Plus effects.
 pub const PLUS_TOP: &str = "FilmCraft Plus";
@@ -29,6 +30,10 @@ const ANIMATION: &[&str] = &[PLUS_TOP, "Animation"];
 pub const INK_KINDS: &[&str] = &["Auto", "Transparency", "Dark Lines", "Light Lines"];
 /// Draw On: where the drawing starts.
 pub const DRAW_DIRECTIONS: &[&str] = &["Left to Right", "Top to Bottom", "From the Middle"];
+/// Chart kinds.
+pub const CHART_TYPES: &[&str] = &["Bars", "Horizontal Bars", "Line", "Pie", "Donut"];
+/// Chart colour sets.
+pub const CHART_PALETTES: &[&str] = &["AVKO", "One Colour", "Neon", "Pastel", "Shades"];
 /// Marker shapes.
 pub const MARKER_SHAPES: &[&str] = &["Arrow", "Circle", "Underline", "Box", "Cross", "Tick"];
 /// Animate In / Out styles.
@@ -269,6 +274,26 @@ fn marker() -> EffectDef {
     video("marker", "Marker", ANIMATION, ps)
 }
 
+/// Chart: an animated bar, line, pie or donut chart from typed numbers.
+fn chart() -> EffectDef {
+    let mut ps = vec![
+        ch("type", "Chart", CHART_TYPES, 0),
+        ParamDef { default: ParamValue::Text("A 40; B 65; C 90; D 55".into()), ..txt("values", "Values") },
+        txt("title", "Title"),
+        txt("unit", "Unit"),
+        b("show_values", "Show Values", true),
+        ch("palette", "Colours", CHART_PALETTES, 0),
+        col("color", "Colour", [1.0, 0.84, 0.2, 1.0]),
+        col("text_color", "Text Colour", [1.0, 1.0, 1.0, 1.0]),
+        pt("center", "Position", f64::NAN, f64::NAN),
+        fs("size", "Size", 70.0, (5.0, 200.0), (20.0, 100.0), "%", 0),
+        pct("panel", "Backdrop", 35.0),
+        pct("opacity", "Opacity", 100.0),
+    ];
+    ps.extend(drawing_time(1.2));
+    video("chart", "Chart", ANIMATION, ps)
+}
+
 /// Face Follow: the clip fills the frame and pans so the face stays in it (the compositor moves
 /// the placed layer; see `filmcraft_render`).
 fn face_follow() -> EffectDef {
@@ -468,6 +493,7 @@ pub(super) fn defs() -> Vec<EffectDef> {
         face_follow(),
         draw_on(),
         marker(),
+        chart(),
     ];
     for d in &mut v {
         d.accelerated = false;
@@ -496,6 +522,7 @@ mod tests {
             "face_follow",
             "draw_on",
             "marker",
+            "chart",
         ] {
             let d = find_effect(id).unwrap_or_else(|| panic!("missing {id}"));
             assert_eq!(d.category.first(), Some(&super::PLUS_TOP), "{id}");

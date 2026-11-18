@@ -164,6 +164,21 @@ heruntergeladen. Danach **Sequenz ▸ Transkript ▸ Untertitel aus Transkript e
 korrigieren und über **Datei ▸ Exportieren ▸ Untertitel…** als SRT für YouTube speichern. Über das Transkript kannst du
 auch Text-basiert schneiden, Pausen und Füllwörter („äh“, „ähm“) entfernen.
 
+## Startbildschirm
+
+FilmCraft Plus startet nicht mehr mit dem Demo-Projekt, sondern mit **Start**:
+
+- **Neues Projekt:** Namen eintippen (optional) und eine Vorlage anklicken. Die passende Sequenz
+  ist dann schon angelegt: **Reel / TikTok / Short** (1080 × 1920, 30 fps), **YouTube 1080p**,
+  **YouTube 4K**, **Musikvideo** (1080p, 24 fps) oder **Leeres Projekt**.
+- **Zuletzt verwendet:** deine gespeicherten Projekte mit Ordner und „geändert vor …“. Ein Klick
+  öffnet das Projekt. Das × am Zeilenende nimmt einen Eintrag aus der Liste (die Datei bleibt).
+- **Projekt öffnen…** für alles, was nicht in der Liste steht.
+- Das Haus-Symbol oben links und **Datei ▸ Projekt schließen** bringen dich zurück zum Start.
+  Bei ungespeicherten Änderungen wird vorher gefragt.
+- Lieber direkt das letzte Projekt? **Einstellungen ▸ Allgemein ▸ Beim Start ▸ Zuletzt
+  verwendetes öffnen**. Das Demo-Projekt gibt es weiter unten auf der Startseite.
+
 ## Reels & TikTok
 
 ### Animierte Untertitel (ein Klick)
@@ -200,6 +215,18 @@ Auf den Schnitt zwischen zwei Clips ziehen, Länge wie gewohnt am Rand ziehen.
 - **Glitch-Schnitt:** Das Bild reißt in Streifen und springt streifenweise zum neuen Clip.
 
 Tipp für Musikvideos: Übergang auf 8 bis 12 Bilder kürzen und genau auf einen Beat-Marker legen.
+
+### Bilder und Videos einblenden (Effekte ▸ FilmCraft Plus ▸ Reels & Shorts)
+
+Für B-Roll, Fotos, Memes oder Logos über deinem Video: Bild oder Clip auf eine Spur **über** dem
+Hauptvideo legen, mit Bewegung auf Größe und Position bringen und **Rein- & Rausanimieren**
+draufziehen. Der Clip animiert dann am Anfang rein und am Ende wieder raus, egal wie lang er
+ist. Kürzt du den Clip, wandert die Animation mit.
+
+- **Stil:** Pop (springt rein und federt nach), von unten / oben / links / rechts reinrutschen,
+  Zoom, Drehung oder einfaches Einblenden.
+- **Dauer rein / raus** in Sekunden; rein oder raus lässt sich einzeln abschalten.
+- **Stärke** und **Nachfedern** für mehr oder weniger Bewegung.
 
 ### Studiolicht (Effekte ▸ FilmCraft Plus ▸ Porträt)
 

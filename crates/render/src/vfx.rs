@@ -21,6 +21,7 @@ mod beat;
 mod distort;
 pub mod face;
 mod immersive;
+pub(crate) mod inout;
 mod lights;
 mod plus;
 mod portrait;
@@ -575,6 +576,8 @@ pub fn apply(img: &mut Image, e: &EffectInstance, cx: &FxCtx) -> bool {
         "look_builder" => plus::look_builder(img, e, cx),
         "beat_pulse" => plus::beat_pulse(img, e, cx),
         "avko_spectrum" => avko::avko_spectrum(img, e, cx),
+        // moves the placed layer instead of its pixels (see `inout::placement`)
+        inout::ID => {}
         "auto_focus" => portrait::auto_focus(img, e, cx),
         "studio_light" => portrait::studio_light(img, e, cx),
         id if id.starts_with("vr_") => immersive::apply(img, e, cx),

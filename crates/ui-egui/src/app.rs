@@ -363,7 +363,10 @@ impl FilmcraftApp {
         // observed as this pass's editor.
         self.ime_drawn_editor = None;
         // Only an actual pass counts toward screenshot settlement; hidden logic ticks do not draw.
-        self.timeline_still = if self.ui.timeline.animating() { 0 } else { self.timeline_still.saturating_add(1) };
+        // only the Edit mode draws (and so animates) the Timeline: on Home, Import and Export its
+        // rects cannot move, and a fit left pending there must not hold `ui.elements` back
+        let moving = self.ui.mode == crate::state::Mode::Edit && self.ui.timeline.animating();
+        self.timeline_still = if moving { 0 } else { self.timeline_still.saturating_add(1) };
         // This is a real UI pass: the one synthetic step offered to raw_input_hook has been fed to
         // egui now. A hidden logic tick never reaches this point and keeps it pending.
         self.synthetic_pending_step = None;

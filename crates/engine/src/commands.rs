@@ -4051,6 +4051,7 @@ fn build() -> Vec<CommandSpec> {
     v.extend(crate::remix::commands());
     v.extend(crate::plus::commands());
     v.extend(crate::plus_captions::commands());
+    v.extend(crate::plus_project::commands());
     v.extend(crate::voiceover::commands());
     v.extend(crate::narration::commands());
     v.extend(crate::keyboard::commands());

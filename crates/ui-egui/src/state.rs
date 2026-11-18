@@ -165,9 +165,11 @@ impl PlaybackRes {
     }
 }
 
-/// Header mode (Import / Edit / Export).
+/// Header mode (Import / Edit / Export), and Home, the start screen.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Mode {
+    /// The start screen: new project, open, recent projects (`panels::home`).
+    Home,
     Import,
     #[default]
     Edit,
@@ -512,6 +514,9 @@ pub struct UiState {
     /// Export mode: settings, preset, destination, range, the Preset Manager and Quick Export.
     #[serde(default)]
     pub export: crate::panels::export_mode::ExportUi,
+    /// Home (the start screen): the name typed for the next new project.
+    #[serde(default)]
+    pub home: crate::panels::home::HomeUi,
     /// Text panel: active tab ("Transcript" / "Captions" / "Graphics").
     #[serde(default = "captions_tab")]
     pub text_tab: String,
@@ -1024,6 +1029,7 @@ impl Default for UiState {
             essential_sound_tab: "Edit".into(),
             tts: Default::default(),
             export: Default::default(),
+            home: Default::default(),
             text_tab: captions_tab(),
             caption_search: String::new(),
             transcript_sel: None,

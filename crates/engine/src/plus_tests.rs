@@ -87,3 +87,56 @@ fn commands_are_listed_and_refuse_without_music() {
     assert!(s.execute("markers.addBeatMarkers", json!({})).is_err());
     assert!(s.execute("effects.syncToMusic", json!({"clip": 999_999})).is_err());
 }
+
+/// Animate In / Out on a clip: the picture is (nearly) absent on the clip's first and last frame,
+/// untouched in the middle, smaller on the way in, and the animation follows a trim.
+#[test]
+fn animate_in_out_brings_a_clip_in_and_takes_it_out() {
+    let (mut s, _, video) = session(0.0);
+    let secs = filmcraft_time::Tick::from_seconds_f64;
+    let (start, len) = {
+        let (_, it) = s.active_sequence().unwrap().find_item(video).unwrap();
+        (it.start, it.duration.seconds())
+    };
+    let fps = s.active_sequence().unwrap().settings.frame_rate.as_f64();
+    let at = |s: &Session, t: f64| s.render_program_at(1.0, start + secs(t)).expect("frame");
+    // red in the middle of the frame, and how many pixels show the clip at all
+    let centre = |img: &filmcraft_render::Image| img.get(img.w / 2, img.h / 2);
+    let covered = |img: &filmcraft_render::Image| img.px.chunks(4).filter(|p| p[0] > 0.2).count();
+    let plain = at(&s, len / 2.0);
+    let full = covered(&plain);
+    assert!(full > 0 && centre(&plain)[0] > 0.5, "the small matte sits in the middle, like a picture laid over a video");
+    s.execute("effects.apply", json!({"clips": [video.0], "effect": "Animate In / Out"})).unwrap();
+    assert_eq!(at(&s, len / 2.0).px, plain.px, "at rest the clip is untouched");
+    let first = at(&s, 0.0);
+    assert!(centre(&first)[0] < 0.25 * centre(&plain)[0], "nearly invisible on the first frame: {:?}", centre(&first));
+    let coming = at(&s, 0.12);
+    assert!(covered(&coming) < full && covered(&coming) > 0, "Pop: smaller on the way in ({} of {full})", covered(&coming));
+    let last = at(&s, len - 1.0 / fps);
+    assert!(centre(&last)[0] < 0.3 * centre(&plain)[0], "nearly gone on the last frame: {:?}", centre(&last));
+    // Slide Up: the picture comes from below, so the top rows are empty on the way in
+    s.execute("effects.setParam", json!({"clip": video.0, "effect": "animate_in_out", "param": "style", "value": 1})).unwrap();
+    let sliding = at(&s, 0.1);
+    let row = |img: &filmcraft_render::Image| {
+        let (mut sum, mut n) = (0.0f64, 0.0f64);
+        for (i, p) in img.px.chunks(4).enumerate() {
+            if p[0] > 0.02 {
+                sum += (i / img.w) as f64;
+                n += 1.0;
+            }
+        }
+        if n > 0.0 { sum / n } else { f64::NAN }
+    };
+    assert!(row(&sliding) > row(&plain) + 20.0, "Slide Up comes from below: row {} vs {}", row(&sliding), row(&plain));
+    assert_eq!(covered(&at(&s, len / 2.0)), full, "and rests where Motion put it");
+    // without effects (the Program Monitor's fx switch) nothing moves
+    let off = filmcraft_render::RenderOptions { scale: 1.0, effects: false, ..Default::default() };
+    let provider = s.media.provider(s.project.clone(), s.services.clone());
+    let seq = s.state.active_sequence.expect("sequence");
+    let raw = filmcraft_render::render_sequence(&s.project, seq, start, off, &provider);
+    assert!(centre(&raw)[0] > 0.5 * centre(&plain)[0]);
+    // undo takes the effect off again
+    s.execute("edit.undo", json!({})).unwrap();
+    s.execute("edit.undo", json!({})).unwrap();
+    assert_eq!(at(&s, 0.0).px, plain.px);
+}

@@ -23,6 +23,9 @@ const FLICKER: &[&str] = &[PLUS_TOP, "Flicker & Glitch"];
 const LOOKS: &[&str] = &[PLUS_TOP, "Looks"];
 const MUSIC: &[&str] = &[PLUS_TOP, "Music"];
 const PORTRAIT: &[&str] = &[PLUS_TOP, "Portrait"];
+const REELS: &[&str] = &[PLUS_TOP, "Reels & Shorts"];
+/// Animate In / Out styles.
+pub const INOUT_STYLES: &[&str] = &["Pop", "Slide Up", "Slide Down", "Slide from Left", "Slide from Right", "Zoom", "Spin", "Fade"];
 /// Studio Light presets (index 0 = Custom).
 pub const STUDIO_PRESETS: &[&str] = &["Custom", "Soft Key", "Beauty", "Dramatic", "Clean Bright", "Warm Evening"];
 
@@ -197,6 +200,25 @@ fn beat_pulse() -> EffectDef {
     video("beat_pulse", "Beat Pulse", MUSIC, ps)
 }
 
+/// Animate In / Out: a picture or video over the main video animates in at the start of its clip
+/// and out at its end (the compositor moves the placed layer; see `filmcraft_render`).
+fn animate_in_out() -> EffectDef {
+    video(
+        "animate_in_out",
+        "Animate In / Out",
+        REELS,
+        vec![
+            ch("style", "Style", INOUT_STYLES, 0),
+            b("animate_in", "Animate In", true),
+            fs("in", "In Duration", 0.35, (0.0, 10.0), (0.0, 2.0), "s", 2),
+            b("animate_out", "Animate Out", true),
+            fs("out", "Out Duration", 0.25, (0.0, 10.0), (0.0, 2.0), "s", 2),
+            fs("amount", "Strength", 100.0, (0.0, 300.0), (0.0, 200.0), "%", 0),
+            pct("bounce", "Bounce", 50.0),
+        ],
+    )
+}
+
 /// The face-tracking group shared by the portrait effects.
 fn face_tracking() -> Vec<ParamDef> {
     const G: &str = "Face Tracking";
@@ -366,7 +388,7 @@ fn transitions() -> Vec<EffectDef> {
 }
 
 pub(super) fn defs() -> Vec<EffectDef> {
-    let mut v = vec![organic_shake(), flicker_stack(), look_builder(), beat_pulse(), avko_spectrum(), auto_focus(), studio_light()];
+    let mut v = vec![organic_shake(), flicker_stack(), look_builder(), beat_pulse(), avko_spectrum(), auto_focus(), studio_light(), animate_in_out()];
     for d in &mut v {
         d.accelerated = false;
         d.float32 = true;
@@ -382,7 +404,7 @@ mod tests {
 
     #[test]
     fn plus_effects_are_registered_in_their_folder() {
-        for id in ["organic_shake", "flicker_stack", "look_builder", "beat_pulse", "avko_spectrum", "auto_focus", "studio_light"] {
+        for id in ["organic_shake", "flicker_stack", "look_builder", "beat_pulse", "avko_spectrum", "auto_focus", "studio_light", "animate_in_out"] {
             let d = find_effect(id).unwrap_or_else(|| panic!("missing {id}"));
             assert_eq!(d.category.first(), Some(&super::PLUS_TOP), "{id}");
             // every parameter id is unique

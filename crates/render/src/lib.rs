@@ -597,9 +597,13 @@ pub(crate) fn item_layer_ex(
         }
     }
     mask::apply_opacity_masks(&mut layer, item, mt, px_scale);
+    // FilmCraft Plus Animate In / Out moves and fades the placed layer at the clip's ends
+    let centre = m.apply(filmcraft_geom::Vec2::new(layer.w as f64 / 2.0, layer.h as f64 / 2.0));
+    let moved = if opts.effects { vfx::inout::placement(item, t, mt, centre, (w as f64, h as f64), seq.settings.frame_rate.as_f64()) } else { None };
+    let m = moved.map_or(m, |p| p.xf.then_apply(&m));
     let placed = if layer.w == w && layer.h == h && identity_placement(&m) { layer } else { layer.transformed(w, h, &m) };
     let (op, bl) = opacity_blend(item, mt);
-    Some(Layer::Full { image: placed, opacity: op, blend: bl, opaque: false })
+    Some(Layer::Full { image: placed, opacity: op * moved.map_or(1.0, |p| p.opacity), blend: bl, opaque: false })
 }
 
 /// The layer of a plain media frame (see [`item_layer_ex`]): only the part with alpha when the frame

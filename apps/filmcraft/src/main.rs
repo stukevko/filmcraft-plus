@@ -5,7 +5,7 @@
 //! unknown option is an error (exit code 2), not a file to open.
 //!
 //! Without a project, `--demo` or `--empty`, Settings ▸ General ▸ At Startup decides: Show Home
-//! (the demo project), Open Most Recent, or an empty project.
+//! (the start screen: new project, open, recent projects), Open Most Recent, or an empty project.
 //!
 //! `--control <port>` (or `FILMCRAFT_CONTROL_PORT`) starts a localhost JSON-lines control server;
 //! `FILMCRAFT_CONTROL_TOKEN` is required (see `docs/control-protocol.md`).
@@ -240,6 +240,7 @@ fn app_creator(launch: Launch, graphics: graphics::GraphicsStart, created: Arc<A
         // voice-over recording reads the microphone through cpal
         session.voiceover.input = Some(Box::new(audio_in::CpalIn::new(&session.prefs.audio_hardware.device_class)));
         let (project, media) = args::project_and_media(&files);
+        let mut show_home = false;
         if let Some(p) = project {
             if let Err(e) = session.execute("file.open", json!({"path": p})) {
                 log::error!("{e}");
@@ -253,11 +254,14 @@ fn app_creator(launch: Launch, graphics: graphics::GraphicsStart, created: Arc<A
                         log::error!("{e}");
                     }
                 }
-                None => {
-                    let _ = session.execute("file.openDemoProject", json!({}));
-                }
+                // nothing to reopen yet: Home, with New Project and Open Project…
+                None => show_home = true,
             }
         } else if !startup_flag && session.prefs.general.at_startup == "emptyProject" {
+        } else if !startup_flag {
+            // Settings ▸ General ▸ At Startup ▸ Show Home: the start screen (new project from a
+            // template, Open Project…, the recent projects) over an empty project
+            show_home = true;
         } else if demo {
             let _ = session.execute("file.openDemoProject", json!({}));
         }
@@ -271,7 +275,12 @@ fn app_creator(launch: Launch, graphics: graphics::GraphicsStart, created: Arc<A
                 Err(e) => log::error!("recovery failed: {e}"),
             }
         }
+        // media given on the command line goes straight to editing
+        let show_home = show_home && media.is_empty();
         let mut app = FilmcraftApp::new(session);
+        if show_home {
+            app.ui.mode = filmcraft_ui_egui::state::Mode::Home;
+        }
         app.set_startup_update_check(true);
         app.graphics_notice = notice;
         if recover == Some(false) {

@@ -39,7 +39,7 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
     }
     icons::paint(&p, home.shrink(5.0), Icon::Home, if hresp.hovered() { t.text } else { t.text_dim });
     if hresp.clicked() {
-        app.ui.mode = Mode::Import;
+        app.ui.mode = Mode::Home;
     }
     x = home.max.x + 16.0;
     // Mode tabs (14 pt; active = primary text with a 2 pt underline under the label)

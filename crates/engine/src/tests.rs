@@ -801,7 +801,8 @@ fn every_video_transition_applies_via_command() {
     s.execute("playhead.set", json!({"time": cut.0})).unwrap();
     let defs: Vec<_> =
         filmcraft_project::effect_defs().iter().filter(|d| d.kind == filmcraft_project::EffectKind::VideoTransition && d.category[0] != "Obsolete").collect();
-    assert_eq!(defs.len(), 84 + 21);
+    // Premiere's current and legacy transitions, and the four FilmCraft Plus ones
+    assert_eq!(defs.len(), 84 + 21 + 4);
     for (i, d) in defs.iter().enumerate() {
         // alternate id and display-name lookups
         let name = if i % 2 == 0 { d.id } else { d.name };

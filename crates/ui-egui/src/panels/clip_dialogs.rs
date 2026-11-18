@@ -66,6 +66,7 @@ fn meta(command: &str) -> Option<(&'static str, &'static str)> {
         "file.closeProject" => (tl!("Save Project"), "closeProject"),
         "app.quit" => (tl!("Save Project"), "quit"),
         "file.open" => (tl!("Save Project"), "openProject"),
+        "file.newProjectPreset" => (tl!("Save Project"), "newProject"),
         _ => return None,
     })
 }
@@ -157,6 +158,17 @@ pub fn ask_before_open(app: &mut FilmcraftApp, path: &str) -> Option<Result<Valu
     }
     app.ui.clip_dialog = Some(ClipDialogDraft { command: "file.open".into(), params: json!({"path": path}), info: Value::Null, error: String::new() });
     Some(Ok(json!({"dialog": "openProject"})))
+}
+
+/// A new project from a Home template with unsaved changes: Save / Don't Save / Cancel is asked
+/// first, and the project is created once the answer lets it. False when there is nothing
+/// unsaved, so the caller creates it now.
+pub fn ask_before_new(app: &mut FilmcraftApp, params: &Value) -> bool {
+    if !app.session.is_dirty() {
+        return false;
+    }
+    app.ui.clip_dialog = Some(ClipDialogDraft { command: "file.newProjectPreset".into(), params: params.clone(), info: Value::Null, error: String::new() });
+    true
 }
 
 /// A request to close the window (Quit, the title bar's close button, the OS): with unsaved
@@ -642,7 +654,7 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) {
                     }
                 }
             }
-            "file.closeProject" | "app.quit" | "file.open" => {
+            "file.closeProject" | "app.quit" | "file.open" | "file.newProjectPreset" => {
                 ui.label(tlf!("Save changes to “{project_name}” before closing?", project_name));
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
@@ -691,7 +703,7 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) {
     }
     if action.is_none()
         && ctx.input(|i| i.key_pressed(egui::Key::Enter) && !i.pointer.any_down())
-        && !matches!(d.command.as_str(), "file.closeProject" | "app.quit" | "file.open")
+        && !matches!(d.command.as_str(), "file.closeProject" | "app.quit" | "file.open" | "file.newProjectPreset")
     {
         action = Some("ok");
     }
@@ -744,7 +756,10 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) {
                 }
                 // a newer prompt (Quit asked while Close Project's dialog was open) is the one to
                 // finish or to show again
-                let newer = matches!(app.ui.clip_dialog.as_ref().map(|c| c.command.as_str()), Some("app.quit" | "file.closeProject" | "file.open"));
+                let newer = matches!(
+                    app.ui.clip_dialog.as_ref().map(|c| c.command.as_str()),
+                    Some("app.quit" | "file.closeProject" | "file.open" | "file.newProjectPreset")
+                );
                 let prompt = if newer { app.ui.clip_dialog.take().unwrap_or(prompt) } else { prompt };
                 let Some(path) = paths.into_iter().next() else {
                     // cancelled: the prompt again, unless another dialog is open now
@@ -799,6 +814,19 @@ fn leave(app: &mut FilmcraftApp, ctx: &egui::Context, prompt: &ClipDialogDraft) 
         && let Err(e) = app.session.execute("file.open", json!({"path": path}))
     {
         app.ui.status = e.to_string();
+    }
+    // Home: Close Project shows it, and a new project from a template leaves it
+    if command == "file.closeProject" {
+        app.ui.mode = crate::state::Mode::Home;
+    }
+    if command == "file.newProjectPreset" {
+        match app.session.execute(command, prompt.params.clone()) {
+            Ok(_) => {
+                app.ui.home.name.clear();
+                app.ui.mode = crate::state::Mode::Edit;
+            }
+            Err(e) => app.ui.status = e.to_string(),
+        }
     }
 }
 

@@ -881,21 +881,27 @@ fn effects_are_indented_under_their_folders() {
     let mut d = Driver::demo();
     d.ok("ui.panel.show", json!({"panel": "Effects"}));
     d.frames(3);
-    for folder in ["Video Effects", "Video Effects/Blur & Sharpen", "Presets", "Lumetri Presets", "Lumetri Presets/Monochrome"] {
-        d.click(&format!("effects.folder.{folder}"));
-    }
-    d.frames(2);
     let preset = d.app().session.presets.all()[0].name.clone();
     let lumetri = filmcraft_render::lumetri_presets::presets().into_iter().find(|p| p.folder == "Monochrome").unwrap().name;
-    for (outer, inner) in [
-        ("Video Effects", "Blur & Sharpen"),
-        ("Blur & Sharpen", "Gaussian Blur"),
-        ("Presets", preset.as_str()),
-        ("Lumetri Presets", "Monochrome"),
-        ("Monochrome", lumetri),
-    ] {
-        let (a, b) = (text_x(&mut d, outer), text_x(&mut d, inner));
-        assert!(b >= a + 12.0, "`{inner}` ({b}) is not indented under `{outer}` ({a})");
+    // One top folder at a time, so its rows are inside the panel whatever stands above it (the
+    // FilmCraft Plus folder adds a row at the top).
+    let groups: [(&[&str], &[(&str, &str)]); 3] = [
+        (&["Video Effects", "Video Effects/Blur & Sharpen"], &[("Video Effects", "Blur & Sharpen"), ("Blur & Sharpen", "Gaussian Blur")]),
+        (&["Presets"], &[("Presets", preset.as_str())]),
+        (&["Lumetri Presets", "Lumetri Presets/Monochrome"], &[("Lumetri Presets", "Monochrome"), ("Monochrome", lumetri)]),
+    ];
+    for (folders, pairs) in groups {
+        for folder in folders {
+            d.click(&format!("effects.folder.{folder}"));
+        }
+        d.frames(2);
+        for (outer, inner) in pairs {
+            let (a, b) = (text_x(&mut d, outer), text_x(&mut d, inner));
+            assert!(b >= a + 12.0, "`{inner}` ({b}) is not indented under `{outer}` ({a})");
+        }
+        // close the top folder again
+        d.click(&format!("effects.folder.{}", folders[0]));
+        d.frames(2);
     }
 }
 

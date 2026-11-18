@@ -144,6 +144,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     uic!("tool.zoom", "Zoom Tool", [], Some("Z")),
     uic!("tool.type", "Type Tool", [], Some("T")),
     uic!("tool.verticalType", "Vertical Type Tool", [], None),
+    uic!("mode.home", "Home", [], None),
     uic!("mode.import", "Import", [], None),
     uic!("mode.edit", "Edit", [], None),
     uic!("mode.export", "Export", ["File", "Export"], Some("Cmd+M")),
@@ -484,6 +485,10 @@ pub fn invoke_command(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, mut
             let zoom = app.reset_ui_zoom(ctx);
             return Ok(json!({"zoom": zoom}));
         }
+        "mode.home" => {
+            app.ui.mode = Mode::Home;
+            return Ok(Value::Null);
+        }
         "mode.import" => {
             app.ui.mode = Mode::Import;
             return Ok(Value::Null);
@@ -665,6 +670,14 @@ pub fn invoke_command(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, mut
     let r = app.session.execute(id, params).map_err(|e| e.to_string());
     if let Err(e) = &r {
         app.ui.status = e.clone();
+    }
+    if r.is_ok() {
+        // Home gives way to Edit once there is something to edit, and Close Project comes Home
+        if id == "file.closeProject" {
+            app.ui.mode = Mode::Home;
+        } else if app.ui.mode == Mode::Home && (id.starts_with("file.new") || matches!(id, "file.open" | "file.openDemoProject" | "file.import")) {
+            app.ui.mode = Mode::Edit;
+        }
     }
     if r.is_ok() {
         let path = save_path.or_else(|| app.session.path.clone());

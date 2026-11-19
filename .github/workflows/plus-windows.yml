@@ -33,7 +33,7 @@ jobs:
       RUSTFLAGS: "-C target-cpu=arrowlake-s"
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Fonts (Japanese UI / titles)
         shell: bash
         run: |
@@ -63,7 +63,7 @@ jobs:
           Copy-Item LICENSE-MIT, LICENSE-APACHE, NOTICE, ATTRIBUTION.md $out
           Copy-Item docs/plus.md "$out/LIESMICH.md"
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: FilmCraft-Plus-windows-x64
           path: FilmCraft-Plus-windows-x64.zip
@@ -76,7 +76,7 @@ jobs:
       RUSTFLAGS: "-C target-cpu=x86-64-v3"
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Fonts (Japanese UI / titles)
         run: |
           git clone --depth 1 https://github.com/storytold/craft-fonts ../craft-fonts || true
@@ -95,7 +95,7 @@ jobs:
         run: |
           packaging/macos/package.sh --arch x86_64 --skip-build
           cp dist/release/filmcraft-*-macos-x86_64.dmg FilmCraft-Plus-macos-intel.dmg
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: FilmCraft-Plus-macos-intel
           path: FilmCraft-Plus-macos-intel.dmg
@@ -105,7 +105,7 @@ jobs:
     needs: [windows, macos]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
       - name: Update the plus-latest release

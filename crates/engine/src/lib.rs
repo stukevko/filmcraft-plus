@@ -1415,6 +1415,8 @@ mod paste_media_tests;
 #[cfg(test)]
 mod place_items_tests;
 #[cfg(test)]
+mod plus_bench_tests;
+#[cfg(test)]
 mod plus_captions_tests;
 #[cfg(test)]
 mod plus_tests;

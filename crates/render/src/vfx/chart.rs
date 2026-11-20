@@ -13,8 +13,9 @@ use filmcraft_geom::Vec2;
 use filmcraft_project::EffectInstance;
 
 use super::draw::{progress, stamp};
+use super::fast::dec;
 use super::text::{TextLook, draw_text};
-use super::{FxCtx, Image, bv, chv, cv, dec, fv, pv, smoothstep, tv};
+use super::{FxCtx, Image, bv, chv, cv, fv, pv, smoothstep, tv};
 
 /// Most entries a chart shows.
 const MAX_ENTRIES: usize = 24;

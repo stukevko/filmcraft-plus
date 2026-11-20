@@ -388,7 +388,7 @@ pub fn tracked(cx: &FxCtx, img: &Image, half: f64) -> Option<Face> {
     let key = env.clip_key();
     let (sw, sh) = env.source_size();
     let scale = (WORK as f32 / sw.max(sh).max(1) as f32).min(1.0);
-    combine(&win, &|id: i64| -> Option<Face> {
+    let analyse = |id: i64| -> Option<Face> {
         let cached = cache().lock().unwrap_or_else(PoisonError::into_inner).get(&(key, id)).copied();
         cached.unwrap_or_else(|| {
             let f = env.source_frame(id as f64 / fps - now, scale).and_then(|f| face_in(&f));
@@ -399,13 +399,34 @@ pub fn tracked(cx: &FxCtx, img: &Image, half: f64) -> Option<Face> {
             m.insert((key, id), f);
             f
         })
-    })
+    };
+    // The frames of the window that were not looked at yet (all of them after a jump of the
+    // playhead, one now and then during playback) are analysed side by side on all cores, so a
+    // jump costs about one analysis and not a dozen in a row.
+    let (lo, hi) = span(&win);
+    let missing: Vec<i64> = {
+        let seen = cache().lock().unwrap_or_else(PoisonError::into_inner);
+        (0..64).map(|k| lo.max(0) + k * win.stride).take_while(|id| *id <= hi.min(win.last.max(0))).filter(|id| !seen.contains_key(&(key, *id))).collect()
+    };
+    if missing.len() > 1 {
+        use rayon::prelude::*;
+        missing.par_iter().for_each(|id| {
+            let _ = analyse(*id);
+        });
+    }
+    combine(&win, &analyse)
+}
+
+/// The first and last frame of the tracking window, on the analysis grid.
+fn span(win: &Window) -> (i64, i64) {
+    let Window { now, half, fps, stride, .. } = *win;
+    ((((now - half) * fps / stride as f64).floor() as i64) * stride, (((now + half) * fps / stride as f64).ceil() as i64) * stride)
 }
 
 /// One face for the window from the per-frame results of `analyse` (frame number → face).
 fn combine(win: &Window, analyse: &dyn Fn(i64) -> Option<Face>) -> Option<Face> {
     let Window { now, half, fps, stride, last, aspect } = *win;
-    let (lo, hi) = ((((now - half) * fps / stride as f64).floor() as i64) * stride, (((now + half) * fps / stride as f64).ceil() as i64) * stride);
+    let (lo, hi) = span(win);
     let mut found: Vec<(Face, f32)> = Vec::new();
     let mut total = 0.0f32;
     let mut id = lo.max(0);

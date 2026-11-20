@@ -20,8 +20,9 @@ use filmcraft_geom::Vec2;
 use filmcraft_project::EffectInstance;
 use rayon::prelude::*;
 
+use super::fast::{dec, enc};
 use super::plus::hd;
-use super::{FxCtx, Image, bv, chv, cv, dec, enc, fv, hash01, luma, pv, smoothstep};
+use super::{FxCtx, Image, bv, chv, cv, fv, hash01, luma, pv, smoothstep};
 
 fn finite_or(v: f32, d: f32) -> f32 {
     if v.is_finite() { v } else { d }
@@ -193,6 +194,30 @@ fn order(mask: &[bool], w: usize, h: usize, direction: u32) -> Order {
     Order { w, h, time }
 }
 
+/// [`order`], remembered for the last few pictures: a still gives the same lines on every frame,
+/// and working the order out is most of the effect's cost.
+fn cached_order(mask: &[bool], w: usize, h: usize, direction: u32) -> std::sync::Arc<Order> {
+    use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+    static CACHE: OnceLock<Mutex<Vec<(u64, Arc<Order>)>>> = OnceLock::new();
+    // the lines themselves are the key (FNV over the mask, 64 pixels at a time)
+    let mut key = 0xcbf2_9ce4_8422_2325u64 ^ ((w as u64) << 40 | (h as u64) << 16 | u64::from(direction));
+    for chunk in mask.chunks(64) {
+        let bits = chunk.iter().enumerate().fold(0u64, |b, (i, m)| b | (u64::from(*m) << i));
+        key = (key ^ bits).wrapping_mul(0x0100_0000_01b3);
+    }
+    let cache = CACHE.get_or_init(|| Mutex::new(Vec::new()));
+    if let Some(hit) = cache.lock().unwrap_or_else(PoisonError::into_inner).iter().find(|(k, o)| *k == key && o.w == w && o.h == h) {
+        return Arc::clone(&hit.1);
+    }
+    let fresh = Arc::new(order(mask, w, h, direction));
+    let mut held = cache.lock().unwrap_or_else(PoisonError::into_inner);
+    if held.len() >= 8 {
+        held.remove(0);
+    }
+    held.push((key, Arc::clone(&fresh)));
+    fresh
+}
+
 /// Draw On: the picture's lines draw themselves.
 pub fn draw_on(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     if img.w < 2 || img.h < 2 {
@@ -256,7 +281,7 @@ pub fn draw_on(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
             best > 0.35
         })
         .collect();
-    let ord = order(&mask, mw, mh, chv(e, "direction"));
+    let ord = cached_order(&mask, mw, mh, chv(e, "direction"));
     // ---- reveal
     let soft = 0.004 + 0.05 * (finite_or(fv(e, "softness", cx), 30.0) / 100.0).clamp(0.0, 1.0);
     let head = drawn * (1.0 + soft);

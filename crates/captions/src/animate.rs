@@ -687,3 +687,35 @@ fn caption_preview() {
     }
     eprintln!("{:.1} ms per frame", started.elapsed().as_secs_f64() * 1000.0 / frames as f64);
 }
+
+/// Local timing: every look at 1080×1920 and 2160×3840.
+#[cfg(test)]
+#[test]
+#[ignore = "timing only"]
+fn caption_bench() {
+    use filmcraft_project::{CAPTION_LOOKS, CaptionWord, ClipId};
+    let secs = Tick::from_seconds_f64;
+    let said = [("Das", 0.05, 0.25), ("ist", 0.3, 0.5), ("mein", 0.55, 0.8), ("neuer", 0.85, 1.2), ("Beat", 1.3, 1.9)];
+    let c = Caption {
+        id: ClipId(1),
+        start: Tick(0),
+        duration: secs(2.4),
+        text: "Das ist mein\nneuer Beat".into(),
+        speaker: None,
+        cue_id: None,
+        settings: String::new(),
+        words: said.iter().map(|(w, a, b)| CaptionWord { text: w.to_string(), start: secs(*a), end: secs(*b) }).collect(),
+    };
+    for (w, h) in [(1080usize, 1920usize), (1920, 1080), (2160, 3840)] {
+        for look in CAPTION_LOOKS {
+            let st = CaptionStyle::look(look).expect("look");
+            let mut best = f64::MAX;
+            for k in 0..3 {
+                let started = std::time::Instant::now();
+                let _ = render_animated(&c, &st, secs(0.6 + 0.04 * f64::from(k)), w, h);
+                best = best.min(started.elapsed().as_secs_f64() * 1000.0);
+            }
+            eprintln!("BENCH {w}x{h} caption {look:10} {best:8.1} ms");
+        }
+    }
+}

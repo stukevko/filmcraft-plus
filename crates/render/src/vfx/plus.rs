@@ -12,7 +12,8 @@ use filmcraft_geom::{Affine, Vec2};
 use filmcraft_project::EffectInstance;
 use rayon::prelude::*;
 
-use super::{FxCtx, Image, add_light, blend_simple, bv, chv, cv, dec, enc, fv, hash01, highlights, luma, noise1, noise3, place, smoothstep};
+use super::fast::{dec, enc};
+use super::{FxCtx, Image, add_light, blend_simple, bv, chv, cv, fv, hash01, highlights, luma, noise1, place, smoothstep};
 use crate::effects::gaussian;
 
 /// Layer pixels per "HD pixel" (the unit of every pixel-sized Plus parameter).
@@ -31,18 +32,22 @@ pub(super) fn soft_blur(img: &Image, sigma: f32) -> Image {
     if !(sigma.is_finite()) || sigma <= 0.3 {
         return img.clone();
     }
-    let mut small = img.clone();
-    let mut f = 1.0_f32;
-    while sigma / f > 12.0 && small.w >= 64 && small.h >= 64 {
+    // a blur of a few pixels has no detail a half-size copy could not hold: reduce until the
+    // blur is about three pixels wide there
+    let reduce = |i: &Image, f: f32| sigma / f > 3.0 && i.w >= 64 && i.h >= 64;
+    if !reduce(img, 1.0) {
+        let mut out = img.clone();
+        gaussian(&mut out, sigma, sigma, true);
+        return out;
+    }
+    let mut small = img.downsample2();
+    let mut f = 2.0_f32;
+    while reduce(&small, f) {
         small = small.downsample2();
         f *= 2.0;
     }
     gaussian(&mut small, sigma / f, sigma / f, true);
-    if f <= 1.0 {
-        return small;
-    }
-    let m = Affine::scale(img.w as f64 / small.w.max(1) as f64, img.h as f64 / small.h.max(1) as f64);
-    small.transformed(img.w, img.h, &m)
+    super::fast::enlarge(&small, img.w, img.h)
 }
 
 /// Hue (0..1), saturation, value → RGB, all 0..1.
@@ -867,15 +872,30 @@ pub(super) fn skin_mask(d: [f32; 3]) -> f32 {
     smoothstep(0.08, 0.18, sat) * (1.0 - smoothstep(0.65, 0.8, sat)) * smoothstep(0.15, 0.3, mx) * (1.0 - smoothstep(40.0, 55.0, hue))
 }
 
-/// Soft highlight compression: above the knee, values bend towards `top`.
-pub(super) fn roll(d: f32, amt: f32) -> f32 {
-    if amt <= 1e-4 || d <= 0.6 {
-        return d;
+/// Soft highlight compression: above the knee, values bend towards a lower white. Prepared
+/// once per frame, so the per-pixel work is one `exp` for bright values and nothing otherwise.
+#[derive(Clone, Copy)]
+pub(super) struct Roll {
+    on: bool,
+    top: f32,
+    g: f32,
+    inv: f32,
+}
+
+impl Roll {
+    pub(super) fn new(amt: f32) -> Self {
+        let amt = if amt.is_finite() { amt.clamp(0.0, 1.0) } else { 0.0 };
+        let g = 1.0 + amt * 6.0;
+        Roll { on: amt > 1e-4, top: 1.0 - amt * 0.4, g, inv: 1.0 / (1.0 - (-g).exp()) }
     }
-    let top = 1.0 - amt * 0.4;
-    let g = 1.0 + amt * 6.0;
-    let x = ((d - 0.6) / 0.4).max(0.0);
-    0.6 + (top - 0.6) * (1.0 - (-x * g).exp()) / (1.0 - (-g).exp())
+    #[inline]
+    pub(super) fn at(&self, d: f32) -> f32 {
+        if !self.on || d <= 0.6 {
+            return d;
+        }
+        let x = (d - 0.6) / 0.4;
+        0.6 + (self.top - 0.6) * (1.0 - (-x * self.g).exp()) * self.inv
+    }
 }
 
 /// Look Builder: Subject (skin smoothing) ▸ Color (exposure, white balance, contrast,
@@ -902,12 +922,17 @@ pub fn look_builder(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
                 if a <= 1e-6 {
                     continue;
                 }
-                let q = blurred.get(x, y);
+                // most pixels are not skin and are left alone at once
                 let d = enc(Image::unpremul([p[0], p[1], p[2], a]));
+                let tone = skin_mask(d);
+                if tone <= 0.0 {
+                    continue;
+                }
+                let q = blurred.get(x, y);
                 let dq = enc(Image::unpremul(q));
                 // keep edges and texture borders: only smooth where the blur barely changes luma
                 let edge = 1.0 - smoothstep(0.03, 0.12, (luma(d) - luma(dq)).abs());
-                let m = skin * skin_mask(d) * edge;
+                let m = skin * tone * edge;
                 for c in 0..4 {
                     p[c] += (q[c] - p[c]) * m;
                 }
@@ -928,6 +953,7 @@ pub fn look_builder(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
         || l.fade > 1e-4
         || l.rolloff > 1e-4;
     if color_on {
+        let rolloff = Roll::new(l.rolloff);
         img.map_rgb(|c, _, _| {
             let c = [c[0] * gain * wb[0], c[1] * gain * wb[1], c[2] * gain * wb[2]];
             let mut d = enc(c);
@@ -966,7 +992,7 @@ pub fn look_builder(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
             }
             // matte: highlight roll-off, then lifted blacks
             for v in &mut d {
-                *v = roll(v.clamp(0.0, 1.0), l.rolloff);
+                *v = rolloff.at(v.clamp(0.0, 1.0));
                 *v = l.fade + *v * (1.0 - l.fade);
             }
             dec(d)
@@ -977,16 +1003,18 @@ pub fn look_builder(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     if l.diffusion > 1e-3 {
         let blur = soft_blur(img, l.diff_size * k * 0.5);
         let dif = l.diffusion;
-        img.px.par_iter_mut().zip(blur.px.par_iter()).enumerate().for_each(|(i, (p, q))| {
-            if i % 4 == 3 {
-                return;
+        img.px.par_chunks_mut(4).zip(blur.px.par_chunks(4)).for_each(|(p, q)| {
+            for c in 0..3 {
+                p[c] = p[c] + (q[c].max(p[c]) - p[c]) * dif * 0.6 + q[c] * dif * 0.12;
             }
-            *p = *p + (q.max(*p) - *p) * dif * 0.6 + q * dif * 0.12;
         });
     }
     if l.halation > 1e-3 {
-        let mut hi = highlights(img, 0.72, 0.18);
-        hi = soft_blur(&hi, 9.0 * k);
+        // the glow is wide: find and blur the highlights on a quarter-size copy
+        let (small, f) = if img.w >= 256 && img.h >= 256 { (img.downsample2().downsample2(), 4.0) } else { (img.clone(), 1.0) };
+        let mut hi = highlights(&small, 0.72, 0.18);
+        gaussian(&mut hi, 9.0 * k / f, 9.0 * k / f, true);
+        let hi = if f > 1.0 { super::fast::enlarge(&hi, img.w, img.h) } else { hi };
         let tint = [1.0f32, 0.22, 0.06];
         let amt = l.halation * 0.9;
         let w = img.w;
@@ -1000,42 +1028,52 @@ pub fn look_builder(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
             }
         });
     }
-    if l.vignette > 1e-3 {
+    // ---- Vignette and film grain (strongest in the midtones) in one finishing pass
+    if l.vignette > 1e-3 || l.grain > 1e-3 {
         let (w, h) = (img.w as f32, img.h as f32);
         let (cxp, cyp) = (w / 2.0, h / 2.0);
         let inner = l.vig_size * 0.7;
-        let amt = l.vignette * 0.85;
+        let vig = if l.vignette > 1e-3 { l.vignette * 0.85 } else { 0.0 };
+        let cell = (l.grain_size * k).max(0.35);
+        let amt = if l.grain > 1e-3 { l.grain * 0.16 } else { 0.0 };
+        // a new grain pattern every frame
+        let seed = seed_of(e, cx).wrapping_add(0x6772_6169) ^ (cx.t.0 as u64).wrapping_mul(0x9E37_79B9);
+        let tile = if amt > 0.0 { super::fast::grain(seed) } else { Vec::new() };
         let wi = img.w;
         img.px.par_chunks_mut(wi * 4).enumerate().for_each(|(y, row)| {
             let dy = (y as f32 + 0.5 - cyp) / cyp;
+            let v = y as f32 / cell;
             for x in 0..wi {
-                let dx = (x as f32 + 0.5 - cxp) / cxp;
-                let r = (dx * dx + dy * dy).sqrt() / std::f32::consts::SQRT_2 * 1.2;
-                let m = 1.0 - amt * smoothstep(inner, inner + 0.7, r);
                 let p = &mut row[x * 4..x * 4 + 4];
-                p[0] *= m;
-                p[1] *= m;
-                p[2] *= m;
+                let a = p[3];
+                if a <= 1e-6 {
+                    continue;
+                }
+                let mut m = 1.0;
+                if vig > 0.0 {
+                    let dx = (x as f32 + 0.5 - cxp) / cxp;
+                    let r = (dx * dx + dy * dy).sqrt() / std::f32::consts::SQRT_2 * 1.2;
+                    m = 1.0 - vig * smoothstep(inner, inner + 0.7, r);
+                }
+                if amt > 0.0 {
+                    let u = x as f32 / cell;
+                    let g = super::fast::grain_at(&tile, u, v) * 1.4 + super::fast::grain_at(&tile, u * 2.1 + 71.3, v * 2.1 + 19.7) * 0.6;
+                    let mut d = enc([p[0] / a * m, p[1] / a * m, p[2] / a * m]);
+                    let yv = luma(d).clamp(0.0, 1.0);
+                    let wgt = 1.0 - (2.0 * yv - 1.0).abs() * 0.6;
+                    for c in &mut d {
+                        *c += g * amt * wgt;
+                    }
+                    let o = dec(d);
+                    p[0] = o[0] * a;
+                    p[1] = o[1] * a;
+                    p[2] = o[2] * a;
+                } else {
+                    p[0] *= m;
+                    p[1] *= m;
+                    p[2] *= m;
+                }
             }
-        });
-    }
-
-    // ---- Film: animated grain, strongest in the midtones
-    if l.grain > 1e-3 {
-        let cell = (l.grain_size * k).max(0.35);
-        let frame = (cx.t.0.rem_euclid(1 << 20)) as f32 * 0.618;
-        let seed = seed_of(e, cx).wrapping_add(0x6772_6169);
-        let amt = l.grain * 0.16;
-        img.map_rgb(|c, x, y| {
-            let (u, v) = (x as f32 / cell, y as f32 / cell);
-            let g = noise3(u, v, frame, seed) * 0.7 + noise3(u * 2.1, v * 2.1, frame + 3.3, seed ^ 0x55) * 0.3;
-            let mut d = enc(c);
-            let y = luma(d).clamp(0.0, 1.0);
-            let w = 1.0 - (2.0 * y - 1.0).abs() * 0.6;
-            for v in &mut d {
-                *v += g * amt * w;
-            }
-            dec(d)
         });
     }
 }

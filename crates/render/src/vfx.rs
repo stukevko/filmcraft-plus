@@ -18,10 +18,13 @@ mod color;
 pub(crate) use color::cdl;
 mod avko;
 mod beat;
+#[cfg(test)]
+mod bench_tests;
 mod chart;
 mod distort;
 mod draw;
 pub mod face;
+mod fast;
 pub(crate) mod follow;
 mod immersive;
 pub(crate) mod inout;

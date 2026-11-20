@@ -16,8 +16,9 @@ use filmcraft_project::EffectInstance;
 use rayon::prelude::*;
 
 use super::beat::{self, Hit, SpectrumCfg};
+use super::fast::dec;
 use super::plus::{hd, rgb_shift, seed_of, soft_blur};
-use super::{FxCtx, Image, add_light, bv, chv, cv, dec, fv, hash01, place};
+use super::{FxCtx, Image, add_light, bv, chv, cv, fv, hash01, place};
 
 fn f(e: &EffectInstance, id: &str, cx: &FxCtx, def: f32) -> f32 {
     let v = fv(e, id, cx);

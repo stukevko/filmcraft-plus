@@ -18,8 +18,9 @@ use filmcraft_project::EffectInstance;
 use rayon::prelude::*;
 
 use super::face;
-use super::plus::{roll, skin_mask, soft_blur};
-use super::{FxCtx, Image, bv, chv, dec, enc, fv, luma, pv, smoothstep};
+use super::fast::{dec, enc};
+use super::plus::{Roll, skin_mask, soft_blur};
+use super::{FxCtx, Image, bv, chv, fv, luma, pv, smoothstep};
 
 /// The person in the layer: face centre and face side in layer pixels.
 #[derive(Clone, Copy, Debug)]
@@ -89,40 +90,45 @@ fn outside(sub: &Subject, area: f32, body: bool, x: f32, y: f32) -> f32 {
 
 /// Blur of `img` that takes little from where `keep` is low (normalised convolution), so the
 /// sharp person does not bleed into the blurred background around them.
-fn weighted_blur(img: &Image, keep: &[f32], sigma: f32) -> Image {
-    let n = img.w * img.h;
-    if keep.len() < n {
-        return soft_blur(img, sigma);
-    }
-    let mut pre = img.clone();
-    let mut wgt = Image::new(img.w, img.h);
-    pre.px.par_chunks_mut(4).zip(wgt.px.par_chunks_mut(4)).zip(keep.par_iter()).for_each(|((p, q), k)| {
-        let k = k.clamp(0.0, 1.0);
-        for c in p.iter_mut() {
-            *c *= k;
-        }
-        q.fill(k);
-    });
+fn weighted_blur(img: &Image, keep_at: &(dyn Fn(f32, f32) -> f32 + Sync), sigma: f32) -> Image {
     // a blur this wide has no fine detail: work on a smaller copy and scale the result up
+    let mut pre: Option<Image> = None;
     let mut f = 1.0f32;
-    while sigma / f >= 6.0 && f < 4.0 && pre.w >= 128 && pre.h >= 128 {
-        pre = pre.downsample2();
-        wgt = wgt.downsample2();
+    loop {
+        let cur = pre.as_ref().unwrap_or(img);
+        if !(sigma / f > 3.0 && f < 8.0 && cur.w >= 128 && cur.h >= 128) {
+            break;
+        }
+        pre = Some(cur.downsample2());
         f *= 2.0;
     }
-    let mut out = soft_blur(&pre, sigma / f);
-    let wb = soft_blur(&wgt, sigma / f);
-    out.px.par_chunks_mut(4).zip(wb.px.par_chunks(4)).for_each(|(p, q)| {
+    let mut pre = pre.unwrap_or_else(|| img.clone());
+    let (pw, ph) = (pre.w.max(1), pre.h.max(1));
+    let mut wgt = Image::new(pre.w, pre.h);
+    let (sx, sy) = (img.w as f32 / pw as f32, img.h as f32 / ph as f32);
+    pre.px.par_chunks_mut(pw * 4).zip(wgt.px.par_chunks_mut(pw * 4)).enumerate().for_each(|(y, (prow, qrow))| {
+        for (x, (p, q)) in prow.chunks_exact_mut(4).zip(qrow.chunks_exact_mut(4)).enumerate() {
+            let k = keep_at((x as f32 + 0.5) * sx, (y as f32 + 0.5) * sy);
+            let k = if k.is_finite() { k.clamp(0.0, 1.0) } else { 0.0 };
+            for c in p.iter_mut() {
+                *c *= k;
+            }
+            q.fill(k);
+        }
+    });
+    let s = sigma / f;
+    crate::effects::gaussian(&mut pre, s, s, true);
+    crate::effects::gaussian(&mut wgt, s, s, true);
+    pre.px.par_chunks_mut(4).zip(wgt.px.par_chunks(4)).for_each(|(p, q)| {
         let k = q[0].max(1e-3);
         for c in p.iter_mut() {
             *c /= k;
         }
     });
     if f <= 1.0 {
-        return out;
+        return pre;
     }
-    let m = filmcraft_geom::Affine::scale(img.w as f64 / out.w.max(1) as f64, img.h as f64 / out.h.max(1) as f64);
-    out.transformed(img.w, img.h, &m)
+    super::fast::enlarge(&pre, img.w, img.h)
 }
 
 /// Auto Focus: the person stays sharp, the rest is blurred, following the face.
@@ -163,20 +169,20 @@ pub fn auto_focus(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
         let k = w.min(h) as f32 / 1080.0;
         let sigma = (blur * 40.0 * k).max(0.35);
         // the background keeps a small weight inside the person so the division stays stable
-        let keep: Vec<f32> = mask.par_iter().map(|m| 0.04 + 0.96 * m).collect();
+        let keep = |x: f32, y: f32| 0.04 + 0.96 * smoothstep(0.0, feather, outside(&sub, area, body, x, y));
         let far = weighted_blur(img, &keep, sigma);
         let mid = weighted_blur(img, &keep, sigma * 0.4);
         img.px.par_chunks_mut(4).zip(mid.px.par_chunks(4)).zip(far.px.par_chunks(4)).zip(mask.par_iter()).for_each(|(((p, a), b), m)| {
             // sharp → half blur → full blur, like a lens going out of focus
             let (t0, t1) = ((m * 2.0).min(1.0), (m * 2.0 - 1.0).max(0.0));
+            let g = 1.0 - 0.6 * dim * m;
             for c in 0..4 {
                 let v = p[c] + (a[c] - p[c]) * t0;
-                let v = v + (b[c] - v) * t1;
+                let v = (v + (b[c] - v) * t1) * if c < 3 { g } else { 1.0 };
                 p[c] = if v.is_finite() { v } else { p[c] };
             }
         });
-    }
-    if dim > 1e-4 {
+    } else if dim > 1e-4 {
         img.px.par_chunks_mut(4).zip(mask.par_iter()).for_each(|(p, m)| {
             let g = 1.0 - 0.6 * dim * m;
             p[0] *= g;
@@ -186,7 +192,6 @@ pub fn auto_focus(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     }
 }
 
-/// One Studio Light setup, every amount 0..1 (`side` −1..1, `spread` a factor).
 #[derive(Clone, Copy, Debug)]
 struct Light {
     key: f32,
@@ -301,19 +306,34 @@ pub fn studio_light(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     let radius = (l.spread * 2.6 * sub.s).max(1.0);
 
     let smooth = (l.skin > 1e-3).then(|| soft_blur(img, 5.0 * k));
-    img.px.par_chunks_mut(w * 4).enumerate().for_each(|(y, row)| {
+    // Where the person, the head and the light are: smooth shapes, so they are worked out on a
+    // quarter-size map (background 0..1, head 0..1, light fall-off 0..1) and enlarged.
+    let (gw, gh) = if w >= 64 && h >= 64 { (w / 4, h / 4) } else { (w, h) };
+    let mut geo = Image::new(gw, gh);
+    let (gx, gy) = (w as f32 / gw as f32, h as f32 / gh as f32);
+    geo.px.par_chunks_mut(gw * 4).enumerate().for_each(|(y, row)| {
+        for (x, g) in row.chunks_exact_mut(4).enumerate() {
+            let (fx, fy) = ((x as f32 + 0.5) * gx, (y as f32 + 0.5) * gy);
+            let dist = ((fx - lx).powi(2) + (fy - ly).powi(2)).sqrt() / radius;
+            g[0] = smoothstep(0.2, 2.5, outside(&sub, 1.0, true, fx, fy));
+            g[1] = 1.0 - smoothstep(0.0, 0.8, outside(&sub, 1.0, false, fx, fy));
+            g[2] = (-dist * dist).exp();
+        }
+    });
+    let geo = if (gw, gh) == (w, h) { geo } else { super::fast::enlarge(&geo, w, h) };
+    // protect the highlights the light created
+    let protect = Roll::new((0.6 * (l.key + auto_stops.max(0.0) * 0.5)).clamp(0.0, 0.5));
+    img.px.par_chunks_mut(w * 4).zip(geo.px.par_chunks(w * 4)).enumerate().for_each(|(y, (row, grow))| {
+        let _ = y;
         for x in 0..w {
             let p = &mut row[x * 4..x * 4 + 4];
             let a = p[3];
             if a <= 1e-6 {
                 continue;
             }
-            let (fx, fy) = (x as f32 + 0.5, y as f32 + 0.5);
+            let fx = x as f32 + 0.5;
             // 0 on the person → 1 in the background
-            let bg = smoothstep(0.2, 2.5, outside(&sub, 1.0, true, fx, fy));
-            let head = 1.0 - smoothstep(0.0, 0.8, outside(&sub, 1.0, false, fx, fy));
-            let dist = ((fx - lx).powi(2) + (fy - ly).powi(2)).sqrt() / radius;
-            let fall = (-dist * dist).exp();
+            let (bg, head, fall) = (grow[x * 4], grow[x * 4 + 1], grow[x * 4 + 2]);
             if show {
                 // setup view: where the key light falls, in yellow
                 let t = 0.6 * fall;
@@ -322,15 +342,19 @@ pub fn studio_light(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
                 p[2] += (0.1 * a - p[2]) * t;
                 continue;
             }
-            // skin smoothing on the person (edges and texture borders stay)
+            // skin smoothing on the person (edges and texture borders stay); most pixels are not
+            // skin and skip it
+            let d0 = enc(Image::unpremul([p[0], p[1], p[2], a]));
             if let Some(blurred) = &smooth {
-                let q = blurred.get(x, y);
-                let d = enc(Image::unpremul([p[0], p[1], p[2], a]));
-                let dq = enc(Image::unpremul(q));
-                let edge = 1.0 - smoothstep(0.03, 0.12, (luma(d) - luma(dq)).abs());
-                let m = l.skin * skin_mask(d) * edge * (1.0 - 0.7 * bg);
-                for c in 0..4 {
-                    p[c] += (q[c] - p[c]) * m;
+                let skin = skin_mask(d0);
+                if skin > 0.0 {
+                    let q = blurred.get(x, y);
+                    let dq = enc(Image::unpremul(q));
+                    let edge = 1.0 - smoothstep(0.03, 0.12, (luma(d0) - luma(dq)).abs());
+                    let m = l.skin * skin * edge * (1.0 - 0.7 * bg);
+                    for c in 0..4 {
+                        p[c] += (q[c] - p[c]) * m;
+                    }
                 }
             }
             let a = p[3].max(1e-6);
@@ -338,8 +362,7 @@ pub fn studio_light(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
             // background dim; in linear light
             let across = ((fx - sub.x) / (1.2 * sub.s)).clamp(-1.0, 1.0) * l.side.signum() * l.side.abs().sqrt();
             // what is bright already takes less of the added light, so skin and shirts keep detail
-            let y0 = luma(enc([p[0] / a, p[1] / a, p[2] / a]));
-            let room = 1.0 - 0.75 * smoothstep(0.5, 0.95, y0);
+            let room = 1.0 - 0.75 * smoothstep(0.5, 0.95, luma(d0));
             let up = auto_stops.max(0.0) + l.key * (0.85 * fall + 0.45 * across.max(0.0) * head);
             let down = auto_stops.min(0.0) + l.key * 0.45 * across.min(0.0) * head - l.background * 1.2 * bg;
             let stops = up * room + down;
@@ -371,10 +394,8 @@ pub fn studio_light(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
                     *v = t + (sc - t) * l.contrast * 1.2 + (*v - t);
                 }
             }
-            // protect the highlights the light created
-            let protect = (0.6 * (l.key + auto_stops.max(0.0) * 0.5)).clamp(0.0, 0.5);
             for v in &mut d {
-                *v = roll(v.max(0.0), protect);
+                *v = protect.at(v.max(0.0));
             }
             let o = dec(d);
             for c in 0..3 {

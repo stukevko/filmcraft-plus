@@ -346,6 +346,20 @@ eigene Ebene, die du mit „Rein- & Rausanimieren“ kombinieren kannst).
 
 Das Diagramm zeigt nur, was du eintippst; es liest keine Daten aus Dateien oder aus dem Bild.
 
+## Wenn es ruckelt oder der Export lange dauert
+
+Die Plus-Effekte rechnen auf der CPU (alle Kerne), nicht auf der Grafikkarte. Ein Clip mit
+einem Plus-Effekt verlässt außerdem den schnellen Grafikkarten-Weg für das ganze Bild.
+
+- **Wiedergabe-Auflösung auf 1/2** stellen (Programmmonitor, Auswahl neben der Zoomstufe). Die
+  Effekte kosten dann nur noch etwa ein Viertel; der Export bleibt in voller Qualität.
+- Schwere Effekte zuerst: **Studiolicht** und **Look Builder** sind die teuersten, danach
+  **Autofokus**. In 4K kosten sie rund viermal so viel wie in 1080p.
+- **Autofokus, Studiolicht, Gesicht folgen** suchen beim ersten Anspringen einer Stelle kurz
+  das Gesicht; beim Durchspielen läuft es danach flüssiger als beim Springen.
+- Für den Export eine **„Plus (GPU …)“-Vorlage** nehmen, damit die Grafikkarte kodiert. Die
+  Effekte selbst rechnet weiterhin die CPU.
+
 ## Optimierungen für deinen PC
 
 - **CPU:** Der Build ist für Arrow Lake-S kompiliert (`target-cpu=arrowlake-s`: AVX2, FMA,

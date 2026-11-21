@@ -35,7 +35,7 @@ use objc2_core_video::{
 };
 use objc2_video_toolbox::{
     VTDecodeFrameFlags, VTDecodeInfoFlags, VTDecompressionOutputCallbackRecord, VTDecompressionSession,
-    kVTVideoDecoderSpecification_RequireHardwareAcceleratedVideoDecoder,
+    kVTVideoDecoderSpecification_EnableHardwareAcceleratedVideoDecoder, kVTVideoDecoderSpecification_RequireHardwareAcceleratedVideoDecoder,
 };
 
 /// `CVPixelBuffer` formats we ask VideoToolbox for: biplanar Y + interleaved CbCr, 8-bit or
@@ -286,10 +286,18 @@ fn layout(info: &NalStreamInfo) -> std::result::Result<Layout, String> {
 }
 
 impl Session {
-    fn new(info: &NalStreamInfo, layout: Layout) -> std::result::Result<Session, String> {
+    /// `hardware`: require the hardware decoder; otherwise VideoToolbox may use the system's own
+    /// software decoder (FilmCraft Plus: Macs whose graphics card offers no video decoder).
+    fn new(info: &NalStreamInfo, layout: Layout, hardware: bool) -> std::result::Result<Session, String> {
         let format = format_description(info)?;
-        // SAFETY: reading an immutable framework constant.
-        let key: &CFString = unsafe { kVTVideoDecoderSpecification_RequireHardwareAcceleratedVideoDecoder };
+        // SAFETY: reading immutable framework constants.
+        let key: &CFString = unsafe {
+            if hardware {
+                kVTVideoDecoderSpecification_RequireHardwareAcceleratedVideoDecoder
+            } else {
+                kVTVideoDecoderSpecification_EnableHardwareAcceleratedVideoDecoder
+            }
+        };
         let spec = CFDictionary::<CFString, CFType>::from_slices(&[key], &[CFBoolean::new(true).as_ref()]);
         let pf = CFNumber::new_i32(layout.pixel_format as i32);
         // SAFETY: reading an immutable framework constant.
@@ -441,6 +449,8 @@ pub struct VtDecoder {
     fail_after: Option<u64>,
     fed: u64,
     name: &'static str,
+    /// The session requires the hardware decoder (else the system's software decoder may run).
+    hardware: bool,
 }
 
 impl VtDecoder {
@@ -449,14 +459,23 @@ impl VtDecoder {
     pub fn new(info: NalStreamInfo) -> std::result::Result<Self, String> {
         validate_reorder_depth(info.reorder)?;
         let layout = layout(&info)?;
-        if !hardware_available(info.codec) {
-            return Err("no hardware decoder".into());
-        }
-        // Create the session now so unsupported streams are declined up front.
-        let session = Session::new(&info, layout.clone())?;
-        let name = match info.codec {
-            NalCodec::H264 => "VideoToolbox H.264",
-            NalCodec::Hevc => "VideoToolbox HEVC",
+        // Create the session now so unsupported streams are declined up front. The hardware
+        // decoder first; where there is none (or it declines the stream), the system's software
+        // decoder, which is still much faster than FilmCraft's own.
+        let hw = if hardware_available(info.codec) { Session::new(&info, layout.clone(), true) } else { Err("no hardware decoder".into()) };
+        let (session, hardware) = match hw {
+            Ok(s) => (s, true),
+            Err(why) => {
+                let s = Session::new(&info, layout.clone(), false).map_err(|e| format!("{why}; system decoder: {e}"))?;
+                log::info!("VideoToolbox: {why}; using the system's software decoder");
+                (s, false)
+            }
+        };
+        let name = match (info.codec, hardware) {
+            (NalCodec::H264, true) => "VideoToolbox H.264",
+            (NalCodec::Hevc, true) => "VideoToolbox HEVC",
+            (NalCodec::H264, false) => "VideoToolbox H.264 (software)",
+            (NalCodec::Hevc, false) => "VideoToolbox HEVC (software)",
         };
         Ok(Self {
             info,
@@ -468,6 +487,7 @@ impl VtDecoder {
             first: true,
             fail_after: None,
             fed: 0,
+            hardware,
             name,
         })
     }
@@ -534,7 +554,7 @@ impl VideoDecoder for VtDecoder {
         }
         self.first = false;
         if self.session.is_none() {
-            self.session = Some(Session::new(&self.info, self.layout.clone()).map_err(CodecError::Decode)?);
+            self.session = Some(Session::new(&self.info, self.layout.clone(), self.hardware).map_err(CodecError::Decode)?);
         }
         let Some(session) = self.session.as_ref() else {
             return Err(CodecError::Decode("no VideoToolbox session".into()));

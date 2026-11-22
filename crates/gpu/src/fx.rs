@@ -106,6 +106,8 @@ struct Step {
     combine: bool,
     /// A blur pass of Unsharp Mask (the original stays untouched until the combine).
     unsharp_blur: bool,
+    /// The pass covers only this top-left part of the working image ((0, 0): all of it).
+    region: (u32, u32),
     /// Bokeh Blur's gather: its kernel (`filmcraft_render::vfx::bokeh_kernel`), read as the aux
     /// texture.
     kernel: Vec<(i32, i32, f32)>,
@@ -116,7 +118,7 @@ fn step(code: u32, i1: [u32; 4], p: &[f32]) -> Step {
     for (d, s) in q.iter_mut().zip(p) {
         *d = *s;
     }
-    Step { run: false, code, i1, p: q, combine: false, unsharp_blur: false, kernel: Vec::new() }
+    Step { run: false, code, i1, p: q, combine: false, unsharp_blur: false, region: (0, 0), kernel: Vec::new() }
 }
 
 /// Texels a row of a kernel texture holds.
@@ -153,9 +155,17 @@ fn kernel_texture(device: &wgpu::Device, queue: &wgpu::Queue, kernel: &[(i32, i3
 
 /// Box passes along x (vertical = false) or y for the radii (radius 0 is a no-op on the CPU).
 fn boxes(radii: &[u32], vertical: bool, repeat: bool, out: &mut Vec<Step>) {
+    boxes_in(radii, vertical, repeat, (0, 0), out);
+}
+
+/// [`boxes`] on the top-left `region` of the working image only ((0, 0): all of it).
+fn boxes_in(radii: &[u32], vertical: bool, repeat: bool, region: (u32, u32), out: &mut Vec<Step>) {
+    // the shader reads the region from one word: width in the low half, height in the high half
+    let packed = (region.0 & 0xFFFF) | (region.1 & 0xFFFF) << 16;
     for &r in radii.iter().filter(|r| **r > 0) {
-        let mut s = step(OP_BOX, [r, repeat as u32, vertical as u32, 0], &[]);
+        let mut s = step(OP_BOX, [r, repeat as u32, vertical as u32, packed], &[]);
         s.run = r > BOX_PER_PIXEL_MAX;
+        s.region = region;
         out.push(s);
     }
 }
@@ -235,21 +245,29 @@ fn steps(op: &FxOp, w: u32, h: u32) -> Vec<Step> {
         }
         FxOp::LookBuilder(look) => {
             use filmcraft_render::vfx::LookPass;
-            // a step that joins a copy with the picture it came from
-            let join = |code: u32, amount: f32| {
-                let mut s = step(code, [0; 4], &[amount]);
-                s.combine = true;
-                s
-            };
             // steps since the last join work on a copy: the picture is kept for the join
             let mut copy_from = 0;
+            // the part of the working image the copy fills after its halvings ((0, 0): all)
+            let mut region = (0u32, 0u32);
             for pass in look.passes() {
                 match pass {
-                    LookPass::Blur { rx, ry } => {
-                        boxes(&rx, false, true, &mut out);
-                        boxes(&ry, true, true, &mut out);
+                    LookPass::Halve => {
+                        let (cw, ch) = if region.0 > 0 { region } else { (w, h) };
+                        region = ((cw / 2).max(1), (ch / 2).max(1));
+                        let mut s = step(OP_BOKEH_DOWN, [cw, ch, 0, 0], &[]);
+                        s.region = region;
+                        out.push(s);
                     }
-                    LookPass::Highlights => out.push(step(OP_LOOK_HIGHLIGHTS, [0; 4], &[])),
+                    LookPass::Blur { rx, ry } => {
+                        // (65535 is past every texture size, so the region fits its half word)
+                        boxes_in(&rx, false, true, region, &mut out);
+                        boxes_in(&ry, true, true, region, &mut out);
+                    }
+                    LookPass::Highlights => {
+                        let mut s = step(OP_LOOK_HIGHLIGHTS, [0; 4], &[]);
+                        s.region = region;
+                        out.push(s);
+                    }
                     LookPass::Grade(p) => {
                         out.push(step(OP_LOOK_GRADE, [0; 4], &p));
                         copy_from = out.len();
@@ -267,8 +285,12 @@ fn steps(op: &FxOp, w: u32, h: u32) -> Vec<Step> {
                         for s in out.iter_mut().skip(copy_from) {
                             s.unsharp_blur = true;
                         }
-                        out.push(join(code, a));
+                        // joins the copy (enlarged from its region) with the picture it came from
+                        let mut s = step(code, [region.0, region.1, 0, 0], &[a]);
+                        s.combine = true;
+                        out.push(s);
                         copy_from = out.len();
+                        region = (0, 0);
                     }
                 }
             }
@@ -556,11 +578,12 @@ impl FxStage {
                     wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(aux) },
                 ],
             });
+            let (gw, gh) = if s.region.0 > 0 && s.region.1 > 0 { (s.region.0.min(w), s.region.1.min(h)) } else { (w, h) };
             let groups = if s.run {
-                let lines = if s.i1[2] != 0 { w } else { h };
+                let lines = if s.i1[2] != 0 { gw } else { gh };
                 (lines.div_ceil(64), 1)
             } else {
-                (w.div_ceil(16), h.div_ceil(16))
+                (gw.div_ceil(16), gh.div_ceil(16))
             };
             dispatches.push(Dispatch { run: s.run, bg, groups });
             cur = dst;

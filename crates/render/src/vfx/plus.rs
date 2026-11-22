@@ -920,11 +920,14 @@ pub struct LookOp {
     h: usize,
 }
 
-/// One step of Look Builder on the graphics card, in order. A `Blur` or `Highlights` works on a
-/// copy; the step after them (`Skin`, `Diffusion`, `Halation`) joins that copy with the picture
-/// it was taken from.
+/// One step of Look Builder on the graphics card, in order. `Halve`, `Blur` and `Highlights`
+/// work on a copy; the step after them (`Skin`, `Diffusion`, `Halation`) enlarges that copy
+/// again and joins it with the picture it was taken from.
 #[derive(Clone, Debug, PartialEq)]
 pub enum LookPass {
+    /// Halve the copy (`Image::downsample2`): a wide blur has no detail a small copy could not
+    /// hold, and costs a fraction there.
+    Halve,
     /// Box blur passes (radii along x, then along y), edges repeated.
     Blur { rx: Vec<u32>, ry: Vec<u32> },
     /// Keep only the bright parts.
@@ -983,19 +986,28 @@ impl LookOp {
         [1.0 + 0.25 * l.temp, 1.0 - 0.2 * l.tint.max(0.0) + 0.1 * (-l.tint).max(0.0), 1.0 - 0.25 * l.temp]
     }
 
-    /// The steps for the graphics card on the working image (empty: nothing to do). The blurs
-    /// run at full size there, where the CPU works on reduced copies; the result is the same
-    /// look, not the same numbers.
+    /// The steps for the graphics card on the working image (empty: nothing to do), the same
+    /// work as [`apply`](Self::apply): blurs on reduced copies, enlarged again. Only the grain
+    /// is another pattern of the same kind.
     pub fn passes(&self) -> Vec<LookPass> {
         let l = &self.l;
-        let k = (self.w as f32 / 1920.0).max(1e-3);
-        let blur = |sigma: f32| {
-            let (rx, ry) = crate::effects::gaussian_boxes(self.w, self.h, sigma, sigma);
-            LookPass::Blur { rx, ry }
+        let k = (self.w as f64 / 1920.0).max(1e-3) as f32;
+        // `soft_blur`: halve until the blur is about three pixels wide, then blur
+        let soft = |sigma: f32, out: &mut Vec<LookPass>| {
+            let (mut w, mut h, mut f) = (self.w, self.h, 1.0_f32);
+            if sigma.is_finite() && sigma > 0.3 {
+                while sigma / f > 3.0 && w >= 64 && h >= 64 {
+                    (w, h, f) = ((w / 2).max(1), (h / 2).max(1), f * 2.0);
+                    out.push(LookPass::Halve);
+                }
+            }
+            let s = if sigma.is_finite() && sigma > 0.3 { sigma / f } else { 0.0 };
+            let (rx, ry) = crate::effects::gaussian_boxes(w, h, s, s);
+            out.push(LookPass::Blur { rx, ry });
         };
         let mut out = Vec::new();
         if l.skin > 1e-3 {
-            out.push(blur(5.0 * k));
+            soft(5.0 * k, &mut out);
             out.push(LookPass::Skin(l.skin));
         }
         if self.color_on() {
@@ -1024,12 +1036,20 @@ impl LookOp {
             ]));
         }
         if l.diffusion > 1e-3 {
-            out.push(blur(l.diff_size * k * 0.5));
+            soft(l.diff_size * k * 0.5, &mut out);
             out.push(LookPass::Diffusion(l.diffusion));
         }
         if l.halation > 1e-3 {
+            // the glow is wide: found and blurred on a quarter-size copy
+            let (w, h, f) = if self.w >= 256 && self.h >= 256 {
+                out.extend([LookPass::Halve, LookPass::Halve]);
+                (((self.w / 2).max(1) / 2).max(1), ((self.h / 2).max(1) / 2).max(1), 4.0)
+            } else {
+                (self.w, self.h, 1.0)
+            };
             out.push(LookPass::Highlights);
-            out.push(blur(9.0 * k));
+            let (rx, ry) = crate::effects::gaussian_boxes(w, h, 9.0 * k / f, 9.0 * k / f);
+            out.push(LookPass::Blur { rx, ry });
             out.push(LookPass::Halation(l.halation * 0.9));
         }
         if l.vignette > 1e-3 || l.grain > 1e-3 {

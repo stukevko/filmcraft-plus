@@ -353,6 +353,10 @@ rechnen auf der CPU (alle Kerne); ein Clip mit einem davon verlässt den schnell
 Grafikkarten-Weg für das ganze Bild, auch wenn Look Builder mit darauf liegt. Dasselbe gilt für
 einen Look Builder mit Maske.
 
+- **Nur die Intel-Grafik der CPU, keine Grafikkarte?** Für kurze Reels und TikToks in
+  1080×1920 gedacht: Look Builder rechnet seine Weichzeichner auf verkleinerten Kopien und
+  kostet die kleine Grafik damit nur einen Bruchteil. Wiedergabe-Auflösung auf 1/2 stellen,
+  zwei RAM-Riegel (Dual Channel) einbauen, exportiert wird über Intel Quick Sync.
 - **Wiedergabe-Auflösung auf 1/2** stellen (Programmmonitor, Auswahl neben der Zoomstufe). Die
   Effekte kosten dann nur noch etwa ein Viertel; der Export bleibt in voller Qualität.
 - Schwere Effekte zuerst: **Studiolicht** ist der teuerste, danach **Autofokus**. In 4K

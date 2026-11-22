@@ -965,8 +965,8 @@ fn look_images(c: &mut GpuCompositor, e: &EffectInstance, w: u32, h: u32) -> (Ve
     (cpu.px, gpu)
 }
 
-/// Look Builder on the graphics card gives the CPU's picture. On a small picture no blur is
-/// reduced on the CPU, so the two agree closely (the CPU reads its colour curves from a table).
+/// Look Builder on the graphics card gives the CPU's picture (the CPU reads its colour curves
+/// from a table, so the numbers agree closely, not to the last bit).
 #[test]
 fn look_builder_on_the_gpu_matches_the_cpu() {
     for (dev, q) in look_devices() {
@@ -987,10 +987,19 @@ fn look_matches(dev: &wgpu::Device, q: &wgpu::Queue) {
     eprintln!("look builder, small picture: max diff {worst:.2e}");
     assert!(gpu.iter().all(|v| v.is_finite()));
     assert!(worst < 4e-3, "max diff {worst}");
+    // at video sizes both blur reduced copies (halved, blurred, enlarged) the same way
+    for (w, h) in [(480, 270), (270, 480), (333, 257)] {
+        let (cpu, gpu) = look_images(&mut c, &e, w, h);
+        let worst = cpu.iter().zip(&gpu).map(|(a, b)| (a - b).abs()).fold(0.0f32, f32::max);
+        let mean = cpu.iter().zip(&gpu).map(|(a, b)| (a - b).abs() as f64).sum::<f64>() / cpu.len() as f64;
+        eprintln!("look builder, {w}x{h}: max diff {worst:.2e}, mean {mean:.2e}");
+        assert!(gpu.iter().all(|v| v.is_finite()));
+        assert!(mean < 1e-3 && worst < 0.05, "{w}x{h}: mean {mean}, max {worst}");
+    }
 }
 
-/// Every ready-made look at a size where the CPU blurs reduced copies and the grain patterns
-/// differ: the pictures stay close on average and nothing breaks.
+/// Every ready-made look at a video size, where the grain patterns differ: the pictures stay
+/// close on average and nothing breaks.
 #[test]
 fn look_builder_looks_stay_close_at_video_size() {
     for (dev, q) in look_devices() {

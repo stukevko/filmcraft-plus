@@ -67,6 +67,15 @@ fn size() -> vec2<i32> {
     return vec2<i32>(i32(u.i0.y), i32(u.i0.z));
 }
 
+// The part of the working image a box pass covers (i1.w: width in the low half, height in the
+// high half; 0: all of it). Look Builder blurs reduced copies kept in the top-left corner.
+fn box_region() -> vec2<i32> {
+    if u.i1.w == 0u {
+        return size();
+    }
+    return vec2<i32>(i32(u.i1.w & 0xFFFFu), i32(u.i1.w >> 16u));
+}
+
 fn ld(p: vec2<i32>) -> vec4<f32> {
     return textureLoad(src, p, 0);
 }
@@ -711,8 +720,31 @@ fn look_grain(gu: f32, gv: f32, seed: u32) -> f32 {
     return top + (bottom - top) * fy;
 }
 
+// The copy a join reads: the working image, or a reduced copy in its top-left i1.xy pixels
+// enlarged to the whole image (`vfx::fast::enlarge`: bilinear, clamped at the edges).
+fn look_copy(p: vec2<i32>) -> vec4<f32> {
+    if u.i1.x == 0u {
+        return ld(p);
+    }
+    let r = vec2<i32>(i32(u.i1.x), i32(u.i1.y));
+    let f = clamp((vec2<f32>(p) + 0.5) * vec2<f32>(r) / vec2<f32>(size()) - 0.5, vec2(0.0), vec2<f32>(r - 1));
+    let i = vec2<i32>(f);
+    let t = f - vec2<f32>(i);
+    let j = min(i + 1, r - 1);
+    let a = ld(i);
+    let b = ld(vec2(j.x, i.y));
+    let c = ld(vec2(i.x, j.y));
+    let d = ld(j);
+    let top = a + (b - a) * t.x;
+    let bottom = c + (d - c) * t.x;
+    return top + (bottom - top) * t.y;
+}
+
 fn look(op: u32, p: vec2<i32>) -> vec4<f32> {
-    let q = ld(p);
+    if op == OP_LOOK_GRADE || op == OP_LOOK_FINISH || op == OP_LOOK_HIGHLIGHTS {
+        return look_point(op, p);
+    }
+    let q = look_copy(p);
     if op == OP_LOOK_SKIN {
         // src: the blurred copy, aux: the picture. Only skin tones away from edges are smoothed.
         let o = textureLoad(aux, p, 0);
@@ -744,6 +776,12 @@ fn look(op: u32, p: vec2<i32>) -> vec4<f32> {
         let m = clamp(max(add.x, max(add.y, add.z)), 0.0, 1.0);
         return vec4(o.rgb + add, o.a + (1.0 - o.a) * m);
     }
+    return q;
+}
+
+// Look Builder's steps that read one pixel.
+fn look_point(op: u32, p: vec2<i32>) -> vec4<f32> {
+    let q = ld(p);
     let a = q.a;
     if op == OP_LOOK_HIGHLIGHTS {
         if a <= 1e-6 {
@@ -847,7 +885,8 @@ fn pixel(op: u32, p: vec2<i32>) -> vec4<f32> {
             let r = i32(u.i1.x);
             let repeat = u.i1.y != 0u;
             let vertical = u.i1.z != 0u;
-            let n = select(s.x, s.y, vertical);
+            let rg = box_region();
+            let n = select(rg.x, rg.y, vertical);
             let x = select(p.x, p.y, vertical);
             var acc = vec4(0.0);
             for (var i = x - r; i <= x + r; i++) {
@@ -1019,7 +1058,7 @@ fn fx_px(@builtin(global_invocation_id) id: vec3<u32>) {
 // pixel for any radius, the arithmetic of `effects::box_rows`.
 @compute @workgroup_size(64)
 fn fx_run(@builtin(global_invocation_id) id: vec3<u32>) {
-    let s = size();
+    let s = box_region();
     let vertical = u.i1.z != 0u;
     let n = select(s.x, s.y, vertical);
     let lines = select(s.y, s.x, vertical);

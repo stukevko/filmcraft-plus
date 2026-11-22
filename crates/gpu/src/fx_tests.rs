@@ -889,3 +889,128 @@ fn effect_source_integer_decimation_preserves_cpu_box_oracle() {
         }
     }
 }
+
+// ------------------------------------------------------------------ FilmCraft Plus: Look Builder
+
+/// The effect shader is valid WGSL (checked without a graphics card, so a mistake shows on every
+/// machine: a shader that does not build takes every GPU effect down with it).
+#[test]
+fn the_effect_shader_is_valid() {
+    let module = wgpu::naga::front::wgsl::parse_str(include_str!("fx.wgsl")).unwrap_or_else(|e| panic!("{}", e.emit_to_string(include_str!("fx.wgsl"))));
+    let mut v = wgpu::naga::valid::Validator::new(wgpu::naga::valid::ValidationFlags::all(), wgpu::naga::valid::Capabilities::empty());
+    v.validate(&module).unwrap_or_else(|e| panic!("{e:?}"));
+}
+
+/// The devices to check Look Builder on: the default one and, on Windows, DX12 with FXC (what
+/// FilmCraft's Windows builds run; WARP stands in when the machine has no graphics card).
+fn look_devices() -> Vec<(wgpu::Device, wgpu::Queue)> {
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut out: Vec<(wgpu::Device, wgpu::Queue)> = device().into_iter().collect();
+    #[cfg(windows)]
+    {
+        let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
+        desc.backends = wgpu::Backends::DX12;
+        desc.backend_options.dx12.shader_compiler = wgpu::Dx12Compiler::Fxc;
+        let instance = wgpu::Instance::new(desc);
+        let adapter = [false, true].into_iter().find_map(|force_fallback_adapter| {
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions { force_fallback_adapter, ..Default::default() })).ok()
+        });
+        if let Some(adapter) = adapter {
+            eprintln!("look builder: DX12 + FXC on {}", adapter.get_info().name);
+            let (dev, q) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).expect("DX12 device");
+            // on this device the effect stage must build: a shader FXC rejects would put every
+            // GPU effect back on the CPU
+            assert!(GpuCompositor::new(&dev, &q).fx.is_some(), "the effect stage did not build with FXC");
+            out.push((dev, q));
+        }
+    }
+    if out.is_empty() {
+        eprintln!("no GPU adapter; skipping");
+    }
+    out
+}
+
+/// A hand-made look without grain (the one part whose pattern differs by design).
+fn look_case() -> Vec<(&'static str, ParamValue)> {
+    vec![
+        ("look", ch(0)),
+        ("skin_smooth", fl(60.0)),
+        ("exposure", fl(0.4)),
+        ("contrast", fl(35.0)),
+        ("saturation", fl(120.0)),
+        ("temperature", fl(20.0)),
+        ("tint", fl(-10.0)),
+        ("shadow_color", col(0.1, 0.3, 0.5)),
+        ("shadow_amt", fl(40.0)),
+        ("highlight_color", col(1.0, 0.8, 0.6)),
+        ("highlight_amt", fl(30.0)),
+        ("fade", fl(12.0)),
+        ("rolloff", fl(25.0)),
+        ("diffusion", fl(40.0)),
+        ("halation", fl(50.0)),
+        ("vignette", fl(45.0)),
+        ("grain", fl(0.0)),
+    ]
+}
+
+fn look_images(c: &mut GpuCompositor, e: &EffectInstance, w: u32, h: u32) -> (Vec<f32>, Vec<f32>) {
+    let px = picture(w, h);
+    let frame = VideoFrame::rgba_f32(w, h, px.clone());
+    let op = FxOp::eval(e, &cx(Tick::ZERO, 1.0), w as usize, h as usize).expect("look builder has a GPU op");
+    assert!(op.gpu_ok());
+    let mut cpu = filmcraft_render::Image { w: w as usize, h: h as usize, px };
+    op.apply(&mut cpu);
+    let fx = LayerFx { size: (w, h), decimation: 1, ops: vec![op] };
+    let (_, _, gpu) = c.effect_image(&frame, &fx).expect("effect image");
+    (cpu.px, gpu)
+}
+
+/// Look Builder on the graphics card gives the CPU's picture. On a small picture no blur is
+/// reduced on the CPU, so the two agree closely (the CPU reads its colour curves from a table).
+#[test]
+fn look_builder_on_the_gpu_matches_the_cpu() {
+    for (dev, q) in look_devices() {
+        look_matches(&dev, &q);
+    }
+}
+
+fn look_matches(dev: &wgpu::Device, q: &wgpu::Queue) {
+    let mut c = GpuCompositor::new(dev, q);
+    if c.fx.is_none() {
+        eprintln!("no effect stage on this device; skipping");
+        return;
+    }
+    let e = effect("look_builder", &look_case());
+    let (cpu, gpu) = look_images(&mut c, &e, 67, 41);
+    assert_eq!(cpu.len(), gpu.len());
+    let worst = cpu.iter().zip(&gpu).map(|(a, b)| (a - b).abs()).fold(0.0f32, f32::max);
+    eprintln!("look builder, small picture: max diff {worst:.2e}");
+    assert!(gpu.iter().all(|v| v.is_finite()));
+    assert!(worst < 4e-3, "max diff {worst}");
+}
+
+/// Every ready-made look at a size where the CPU blurs reduced copies and the grain patterns
+/// differ: the pictures stay close on average and nothing breaks.
+#[test]
+fn look_builder_looks_stay_close_at_video_size() {
+    for (dev, q) in look_devices() {
+        looks_stay_close(&dev, &q);
+    }
+}
+
+fn looks_stay_close(dev: &wgpu::Device, q: &wgpu::Queue) {
+    let mut c = GpuCompositor::new(dev, q);
+    if c.fx.is_none() {
+        eprintln!("no effect stage on this device; skipping");
+        return;
+    }
+    // (a number past the end of the list falls back to the hand-set values)
+    for look in 1..=8 {
+        let e = effect("look_builder", &[("look", ch(look)), ("skin_smooth", fl(50.0))]);
+        let (cpu, gpu) = look_images(&mut c, &e, 480, 270);
+        assert!(gpu.iter().all(|v| v.is_finite()), "look {look}");
+        let mean = cpu.iter().zip(&gpu).map(|(a, b)| (a - b).abs() as f64).sum::<f64>() / cpu.len() as f64;
+        eprintln!("look {look}: mean diff {mean:.2e}");
+        assert!(mean < 0.02, "look {look}: mean diff {mean}");
+    }
+}

@@ -55,6 +55,13 @@ const OP_BOKEH_BOOST: u32 = 33u;
 const OP_BOKEH: u32 = 34u;
 const OP_BOKEH_UP: u32 = 35u;
 const OP_THREE_WAY: u32 = 36u;
+// FilmCraft Plus: Look Builder (`filmcraft_render::vfx::LookPass`)
+const OP_LOOK_SKIN: u32 = 40u;
+const OP_LOOK_GRADE: u32 = 41u;
+const OP_LOOK_DIFFUSION: u32 = 42u;
+const OP_LOOK_HIGHLIGHTS: u32 = 43u;
+const OP_LOOK_HALATION: u32 = 44u;
+const OP_LOOK_FINISH: u32 = 45u;
 
 fn size() -> vec2<i32> {
     return vec2<i32>(i32(u.i0.y), i32(u.i0.z));
@@ -646,11 +653,167 @@ fn lumetri_op(c: vec3<f32>, p: vec2<i32>) -> vec3<f32> {
 }
 
 // One output pixel of every op but the running-sum box blur.
+// ---- FilmCraft Plus: Look Builder (`vfx::plus::LookOp::apply` is the CPU version)
+
+// `vfx::plus::skin_mask`: is this display-encoded colour a skin tone? 0..1
+fn look_skin_mask(d: vec3<f32>) -> f32 {
+    let mx = max(d.x, max(d.y, d.z));
+    let mn = min(d.x, min(d.y, d.z));
+    if mx <= 1e-4 || d.x < d.y || d.y < d.z * 0.9 {
+        return 0.0;
+    }
+    let sat = (mx - mn) / mx;
+    let hue = 60.0 * (d.y - d.z) / max(mx - mn, 1e-4);
+    return smoothstep_fx(0.08, 0.18, sat) * (1.0 - smoothstep_fx(0.65, 0.8, sat)) * smoothstep_fx(0.15, 0.3, mx)
+        * (1.0 - smoothstep_fx(40.0, 55.0, hue));
+}
+
+// `vfx::blend_simple` Overlay
+fn look_overlay(b: vec3<f32>, t: vec3<f32>) -> vec3<f32> {
+    let lo = 2.0 * b * t;
+    let hi = vec3(1.0) - 2.0 * (vec3(1.0) - min(b, vec3(1.0))) * (vec3(1.0) - min(t, vec3(1.0)));
+    return select(hi, lo, b < vec3(0.5));
+}
+
+// `vfx::plus::Roll::at`: highlights above 0.6 bend towards `top`
+fn look_roll(d: vec3<f32>, top: f32, g: f32, inv: f32) -> vec3<f32> {
+    let x = (d - vec3(0.6)) / 0.4;
+    let bent = vec3(0.6) + (top - 0.6) * (vec3(1.0) - exp(-x * g)) * inv;
+    return select(bent, d, d <= vec3(0.6));
+}
+
+// One grain value in -1..1 at a whole position (the CPU reads a random tile instead: another
+// pattern of the same kind).
+fn look_grain_cell(x: i32, y: i32, seed: u32) -> f32 {
+    var h = (u32(x) * 0x9E3779B1u) ^ (u32(y) * 0x85EBCA77u) ^ seed;
+    h = h ^ (h >> 15u);
+    h = h * 0x2C1B3C6Du;
+    h = h ^ (h >> 12u);
+    h = h * 0x297A2D39u;
+    h = h ^ (h >> 15u);
+    return f32(h & 0xFFFFu) / 65535.0 + f32(h >> 16u) / 65535.0 - 1.0;
+}
+
+// `vfx::fast::grain_at`: grain between the whole positions
+fn look_grain(gu: f32, gv: f32, seed: u32) -> f32 {
+    let uf = floor(gu);
+    let vf = floor(gv);
+    let fx = gu - uf;
+    let fy = gv - vf;
+    let x0 = i32(uf);
+    let y0 = i32(vf);
+    let a = look_grain_cell(x0, y0, seed);
+    let b = look_grain_cell(x0 + 1, y0, seed);
+    let c = look_grain_cell(x0, y0 + 1, seed);
+    let d = look_grain_cell(x0 + 1, y0 + 1, seed);
+    let top = a + (b - a) * fx;
+    let bottom = c + (d - c) * fx;
+    return top + (bottom - top) * fy;
+}
+
+fn look(op: u32, p: vec2<i32>) -> vec4<f32> {
+    let q = ld(p);
+    if op == OP_LOOK_SKIN {
+        // src: the blurred copy, aux: the picture. Only skin tones away from edges are smoothed.
+        let o = textureLoad(aux, p, 0);
+        if o.a <= 1e-6 {
+            return o;
+        }
+        let d = enc(o.rgb / o.a);
+        let tone = look_skin_mask(d);
+        if tone <= 0.0 {
+            return o;
+        }
+        let qc = select(q.rgb / q.a, vec3(0.0), q.a <= 1e-6);
+        let edge = 1.0 - smoothstep_fx(0.03, 0.12, abs(luma709(d) - luma709(enc(qc))));
+        return o + (q - o) * (u.p0.x * tone * edge);
+    }
+    if op == OP_LOOK_DIFFUSION {
+        let o = textureLoad(aux, p, 0);
+        let dif = u.p0.x;
+        return vec4(o.rgb + (max(q.rgb, o.rgb) - o.rgb) * (dif * 0.6) + q.rgb * (dif * 0.12), o.a);
+    }
+    if op == OP_LOOK_HALATION {
+        // src: the blurred highlights, aux: the picture
+        let o = textureLoad(aux, p, 0);
+        let lum = luma709(q.rgb) * u.p0.x;
+        if lum <= 1e-5 {
+            return o;
+        }
+        let add = vec3(1.0, 0.22, 0.06) * lum;
+        let m = clamp(max(add.x, max(add.y, add.z)), 0.0, 1.0);
+        return vec4(o.rgb + add, o.a + (1.0 - o.a) * m);
+    }
+    let a = q.a;
+    if op == OP_LOOK_HIGHLIGHTS {
+        if a <= 1e-6 {
+            return vec4(0.0);
+        }
+        return q * smoothstep_fx(0.72, 0.9, luma709(enc(q.rgb / a)));
+    }
+    if a <= 1e-6 {
+        return q;
+    }
+    if op == OP_LOOK_GRADE {
+        var d = enc(q.rgb / a * u.p0.xyz);
+        let co = u.p0.w;
+        if abs(co) > 1e-4 {
+            let x = clamp(d, vec3(0.0), vec3(1.0));
+            if co > 0.0 {
+                let sc = x * x * (vec3(3.0) - 2.0 * x);
+                d = x + (sc - x) * (min(co, 1.0) * 1.2);
+            } else {
+                d = vec3(0.5) + (x - vec3(0.5)) * (1.0 + co * 0.7);
+            }
+        }
+        let y0 = luma709(d);
+        d = vec3(y0) + (d - vec3(y0)) * u.p1.x;
+        let y = clamp(luma709(d), 0.0, 1.0);
+        if u.p1.y > 1e-4 {
+            d = d + (look_overlay(d, u.p2.xyz) - d) * ((1.0 - y) * (1.0 - y) * u.p1.y);
+        }
+        if u.p1.z > 1e-4 {
+            d = d + (look_overlay(d, u.p3.xyz) - d) * (y * y * u.p1.z);
+        }
+        d = clamp(d, vec3(0.0), vec3(1.0));
+        if u.p2.w > 0.5 {
+            d = look_roll(d, u.p3.w, u.p4.x, u.p4.y);
+        }
+        let fade = u.p1.w;
+        d = vec3(fade) + d * (1.0 - fade);
+        return vec4(dec(d) * a, a);
+    }
+    // OP_LOOK_FINISH: vignette, then grain (strongest in the midtones)
+    let sz = vec2<f32>(size());
+    let mid = sz * 0.5;
+    var m = 1.0;
+    if u.p0.x > 0.0 {
+        let dd = (vec2<f32>(p) + 0.5 - mid) / mid;
+        let r = length(dd) / 1.4142135 * 1.2;
+        m = 1.0 - u.p0.x * smoothstep_fx(u.p0.y, u.p0.y + 0.7, r);
+    }
+    let amt = u.p0.w;
+    if amt <= 0.0 {
+        return vec4(q.rgb * m, a);
+    }
+    let cell = u.p0.z;
+    let gu = f32(p.x) / cell;
+    let gv = f32(p.y) / cell;
+    let g = look_grain(gu, gv, u.i1.x) * 1.4 + look_grain(gu * 2.1 + 71.3, gv * 2.1 + 19.7, u.i1.x) * 0.6;
+    let d = enc(q.rgb / a * m);
+    let yv = clamp(luma709(d), 0.0, 1.0);
+    let wgt = 1.0 - abs(2.0 * yv - 1.0) * 0.6;
+    return vec4(dec(d + vec3(g * amt * wgt)) * a, a);
+}
+
 fn pixel(op: u32, p: vec2<i32>) -> vec4<f32> {
     let s = size();
     let pc = vec2<f32>(p) + 0.5;
     if op >= OP_BOKEH_DOWN && op <= OP_BOKEH_UP {
         return bokeh(op, p);
+    }
+    if op >= OP_LOOK_SKIN && op <= OP_LOOK_FINISH {
+        return look(op, p);
     }
     switch op {
         case OP_INVERT_ALPHA: {

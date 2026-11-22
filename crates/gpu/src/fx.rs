@@ -57,6 +57,13 @@ const OP_BOKEH_BOOST: u32 = 33;
 const OP_BOKEH: u32 = 34;
 const OP_BOKEH_UP: u32 = 35;
 const OP_THREE_WAY: u32 = 36;
+// FilmCraft Plus ▸ Look Builder
+const OP_LOOK_SKIN: u32 = 40;
+const OP_LOOK_GRADE: u32 = 41;
+const OP_LOOK_DIFFUSION: u32 = 42;
+const OP_LOOK_HIGHLIGHTS: u32 = 43;
+const OP_LOOK_HALATION: u32 = 44;
+const OP_LOOK_FINISH: u32 = 45;
 
 type Target = (wgpu::Texture, wgpu::TextureView);
 
@@ -94,7 +101,8 @@ struct Step {
     code: u32,
     i1: [u32; 4],
     p: [f32; 24],
-    /// Unsharp combine: reads the blurred image and the original.
+    /// Unsharp combine: reads the blurred image and the original. (Look Builder's skin,
+    /// diffusion and halation steps join a blurred copy with the picture the same way.)
     combine: bool,
     /// A blur pass of Unsharp Mask (the original stays untouched until the combine).
     unsharp_blur: bool,
@@ -224,6 +232,46 @@ fn steps(op: &FxOp, w: u32, h: u32) -> Vec<Step> {
             let mut s = step(OP_UNSHARP, [0; 4], &[*amount, *threshold]);
             s.combine = true;
             out.push(s);
+        }
+        FxOp::LookBuilder(look) => {
+            use filmcraft_render::vfx::LookPass;
+            // a step that joins a copy with the picture it came from
+            let join = |code: u32, amount: f32| {
+                let mut s = step(code, [0; 4], &[amount]);
+                s.combine = true;
+                s
+            };
+            // steps since the last join work on a copy: the picture is kept for the join
+            let mut copy_from = 0;
+            for pass in look.passes() {
+                match pass {
+                    LookPass::Blur { rx, ry } => {
+                        boxes(&rx, false, true, &mut out);
+                        boxes(&ry, true, true, &mut out);
+                    }
+                    LookPass::Highlights => out.push(step(OP_LOOK_HIGHLIGHTS, [0; 4], &[])),
+                    LookPass::Grade(p) => {
+                        out.push(step(OP_LOOK_GRADE, [0; 4], &p));
+                        copy_from = out.len();
+                    }
+                    LookPass::Finish(p, seed) => {
+                        out.push(step(OP_LOOK_FINISH, [seed, 0, 0, 0], &p));
+                        copy_from = out.len();
+                    }
+                    LookPass::Skin(a) | LookPass::Diffusion(a) | LookPass::Halation(a) => {
+                        let code = match pass {
+                            LookPass::Skin(_) => OP_LOOK_SKIN,
+                            LookPass::Diffusion(_) => OP_LOOK_DIFFUSION,
+                            _ => OP_LOOK_HALATION,
+                        };
+                        for s in out.iter_mut().skip(copy_from) {
+                            s.unsharp_blur = true;
+                        }
+                        out.push(join(code, a));
+                        copy_from = out.len();
+                    }
+                }
+            }
         }
         FxOp::Crop { x0, x1, y0, y1, feather } => out.push(step(OP_CROP, [0; 4], &[*x0, *x1, *y0, *y1, *feather])),
         FxOp::Resample(r) => {

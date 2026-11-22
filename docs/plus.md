@@ -348,13 +348,15 @@ Das Diagramm zeigt nur, was du eintippst; es liest keine Daten aus Dateien oder 
 
 ## Wenn es ruckelt oder der Export lange dauert
 
-Die Plus-Effekte rechnen auf der CPU (alle Kerne), nicht auf der Grafikkarte. Ein Clip mit
-einem Plus-Effekt verlässt außerdem den schnellen Grafikkarten-Weg für das ganze Bild.
+**Look Builder** rechnet auf der Grafikkarte (Vorschau und Export). Die anderen Plus-Effekte
+rechnen auf der CPU (alle Kerne); ein Clip mit einem davon verlässt den schnellen
+Grafikkarten-Weg für das ganze Bild, auch wenn Look Builder mit darauf liegt. Dasselbe gilt für
+einen Look Builder mit Maske.
 
 - **Wiedergabe-Auflösung auf 1/2** stellen (Programmmonitor, Auswahl neben der Zoomstufe). Die
   Effekte kosten dann nur noch etwa ein Viertel; der Export bleibt in voller Qualität.
-- Schwere Effekte zuerst: **Studiolicht** und **Look Builder** sind die teuersten, danach
-  **Autofokus**. In 4K kosten sie rund viermal so viel wie in 1080p.
+- Schwere Effekte zuerst: **Studiolicht** ist der teuerste, danach **Autofokus**. In 4K
+  kosten sie rund viermal so viel wie in 1080p.
 - **Autofokus, Studiolicht, Gesicht folgen** suchen beim ersten Anspringen einer Stelle kurz
   das Gesicht; beim Durchspielen läuft es danach flüssiger als beim Springen.
 - Für den Export eine **„Plus (GPU …)“-Vorlage** nehmen, damit die Grafikkarte kodiert. Die
@@ -370,7 +372,7 @@ einem Plus-Effekt verlässt außerdem den schnellen Grafikkarten-Weg für das ga
 - **Decoding:** H.264/HEVC laufen über die Hardware der RX 5700 (Media Foundation / DXVA).
 - **Export:** „Hardware-Encoder verwenden“ ist standardmäßig an. Auf der RX 5700 exportiert
   FilmCraft Plus H.264 und H.265 über **AMD VCN** (Media Foundation), auf NVIDIA-Karten über
-  NVENC, ohne Grafikkarte über Intel Quick Sync. Passt eine Einstellung nicht (z. B. zwei
+  **NVENC** (z. B. RTX 2080: H.264, H.265, auch 10-Bit/HDR), ohne Grafikkarte über Intel Quick Sync. Passt eine Einstellung nicht (z. B. zwei
   Durchgänge, CRF, HDR), nimmt FilmCraft für H.264 automatisch den Software-Encoder.
   - Gibt es zwei Encoder (RX 5700 **und** Intel-Grafik), wird AMD bevorzugt. Lieber Intel Quick
     Sync? Umgebungsvariable `FILMCRAFT_HW_ENCODER=Intel` setzen.

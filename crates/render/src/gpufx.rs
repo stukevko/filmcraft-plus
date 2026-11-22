@@ -219,10 +219,13 @@ pub enum FxOp {
         aspect: f32,
         gpu_capable: bool,
     },
+    /// FilmCraft Plus ▸ Look Builder.
+    LookBuilder(crate::vfx::LookOp),
 }
 
 /// Effect ids [`FxOp::eval`] understands (the GPU-capable standard effects).
 pub const GPU_EFFECTS: &[&str] = &[
+    "look_builder",
     "brightness_contrast",
     "proc_amp",
     "tint",
@@ -297,6 +300,7 @@ impl FxOp {
             return None;
         }
         Some(match e.effect.as_str() {
+            "look_builder" => FxOp::LookBuilder(crate::vfx::LookOp::eval(e, cx, w, h)),
             "brightness_contrast" => FxOp::BrightnessContrast { br: f(e, "brightness", cx) / 100.0 * 0.4, co: 1.0 + f(e, "contrast", cx) / 100.0 },
             "proc_amp" => FxOp::ProcAmp {
                 br: f(e, "brightness", cx) / 100.0 * 0.4,
@@ -678,6 +682,7 @@ impl FxOp {
             FxOp::ProcAmp { br, co, hue, sat } => fin(&[*br, *co, *hue, *sat]),
             FxOp::Tint { black, white, amount } => fin(black) && fin(white) && amount.is_finite(),
             FxOp::BlackWhite | FxOp::HFlip | FxOp::VFlip => true,
+            FxOp::LookBuilder(l) => l.finite(),
             FxOp::ColorBalance { sh, md, hi, .. } => fin(sh) && fin(md) && fin(hi),
             FxOp::ThreeWay { sh, md, hi, range, sat } => fin(sh) && fin(md) && fin(hi) && fin(range) && sat.is_finite(),
             FxOp::LeaveColor { amount, key_hue, tol, soft } => fin(&[*amount, *key_hue, *tol, *soft]),
@@ -723,6 +728,7 @@ impl FxOp {
             return;
         }
         match self {
+            FxOp::LookBuilder(l) => l.apply(img),
             FxOp::BrightnessContrast { br, co } => {
                 let (br, co) = (*br, *co);
                 img.map_rgb(|c, _, _| {

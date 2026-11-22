@@ -679,7 +679,7 @@ pub fn beat_pulse(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
 
 // ================================================================== Look Builder
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct Look {
     skin: f32,
     exposure: f32,
@@ -902,179 +902,308 @@ impl Roll {
 /// saturation, split toning) ▸ Matte (fade, highlight roll-off) ▸ Lens (diffusion, halation,
 /// vignette) ▸ Film (grain).
 pub fn look_builder(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
-    if img.w == 0 || img.h == 0 {
-        return;
-    }
-    let strength = (fv(e, "strength", cx) / 100.0).clamp(0.0, 1.0);
-    let strength = if strength.is_finite() { strength } else { 1.0 };
-    let l = scaled(look_params(e, cx), strength);
-    let k = hd(img) as f32;
+    LookOp::eval(e, cx, img.w, img.h).apply(img);
+}
 
-    // ---- Subject: edge-aware smoothing of skin tones
-    if l.skin > 1e-3 {
-        let blurred = soft_blur(img, 5.0 * k);
-        let skin = l.skin;
-        let w = img.w;
-        img.px.par_chunks_mut(w * 4).enumerate().for_each(|(y, row)| {
-            for x in 0..w {
-                let p = &mut row[x * 4..x * 4 + 4];
-                let a = p[3];
-                if a <= 1e-6 {
-                    continue;
-                }
-                // most pixels are not skin and are left alone at once
-                let d = enc(Image::unpremul([p[0], p[1], p[2], a]));
-                let tone = skin_mask(d);
-                if tone <= 0.0 {
-                    continue;
-                }
-                let q = blurred.get(x, y);
-                let dq = enc(Image::unpremul(q));
-                // keep edges and texture borders: only smooth where the blur barely changes luma
-                let edge = 1.0 - smoothstep(0.03, 0.12, (luma(d) - luma(dq)).abs());
-                let m = skin * tone * edge;
-                for c in 0..4 {
-                    p[c] += (q[c] - p[c]) * m;
-                }
-            }
-        });
-    }
+/// Look Builder with its parameters read (keyframes, look, strength): what the CPU ([`apply`])
+/// and the graphics card ([`passes`]) both work from.
+///
+/// [`apply`]: LookOp::apply
+/// [`passes`]: LookOp::passes
+#[derive(Clone, Debug, PartialEq)]
+pub struct LookOp {
+    l: Look,
+    /// Grain pattern of this frame.
+    seed: u64,
+    /// The working image the parameters were read for.
+    w: usize,
+    h: usize,
+}
 
-    // ---- Color + Matte (+ Film grain, applied last in the same pass after the lens tools)
-    let gain = l.exposure.exp2();
-    let wb = [1.0 + 0.25 * l.temp, 1.0 - 0.2 * l.tint.max(0.0) + 0.1 * (-l.tint).max(0.0), 1.0 - 0.25 * l.temp];
-    let color_on = (l.exposure.abs() > 1e-4)
-        || l.contrast.abs() > 1e-4
-        || (l.saturation - 1.0).abs() > 1e-4
-        || l.temp.abs() > 1e-4
-        || l.tint.abs() > 1e-4
-        || l.sh_amt > 1e-4
-        || l.hi_amt > 1e-4
-        || l.fade > 1e-4
-        || l.rolloff > 1e-4;
-    if color_on {
-        let rolloff = Roll::new(l.rolloff);
-        img.map_rgb(|c, _, _| {
-            let c = [c[0] * gain * wb[0], c[1] * gain * wb[1], c[2] * gain * wb[2]];
-            let mut d = enc(c);
-            // contrast: S-curve around mid grey (positive) or a flatter line (negative)
-            if l.contrast.abs() > 1e-4 {
-                for v in &mut d {
-                    let x = v.clamp(0.0, 1.0);
-                    *v = if l.contrast > 0.0 {
-                        let s = x * x * (3.0 - 2.0 * x);
-                        x + (s - x) * l.contrast.min(1.0) * 1.2
-                    } else {
-                        0.5 + (x - 0.5) * (1.0 + l.contrast * 0.7)
-                    };
-                }
-            }
-            // saturation around luma
-            let y = luma(d);
-            for v in &mut d {
-                *v = y + (*v - y) * l.saturation;
-            }
-            // split toning (overlay of the tint colours, weighted to shadows / highlights)
-            let y = luma(d).clamp(0.0, 1.0);
-            if l.sh_amt > 1e-4 {
-                let ws = (1.0 - y).powi(2) * l.sh_amt;
-                let t = blend_simple(4, d, l.sh_col);
-                for i in 0..3 {
-                    d[i] += (t[i] - d[i]) * ws;
-                }
-            }
-            if l.hi_amt > 1e-4 {
-                let wh = y * y * l.hi_amt;
-                let t = blend_simple(4, d, l.hi_col);
-                for i in 0..3 {
-                    d[i] += (t[i] - d[i]) * wh;
-                }
-            }
-            // matte: highlight roll-off, then lifted blacks
-            for v in &mut d {
-                *v = rolloff.at(v.clamp(0.0, 1.0));
-                *v = l.fade + *v * (1.0 - l.fade);
-            }
-            dec(d)
-        });
-    }
+/// One step of Look Builder on the graphics card, in order. A `Blur` or `Highlights` works on a
+/// copy; the step after them (`Skin`, `Diffusion`, `Halation`) joins that copy with the picture
+/// it was taken from.
+#[derive(Clone, Debug, PartialEq)]
+pub enum LookPass {
+    /// Box blur passes (radii along x, then along y), edges repeated.
+    Blur { rx: Vec<u32>, ry: Vec<u32> },
+    /// Keep only the bright parts.
+    Highlights,
+    /// Smooth skin tones with the blurred copy: amount.
+    Skin(f32),
+    /// Colour and matte: `[gain r, g, b, contrast, saturation, shadow amount, highlight amount,
+    /// fade, shadow r, g, b, roll-off on, highlight r, g, b, roll-off top, roll-off g, roll-off
+    /// inverse]`.
+    Grade([f32; 18]),
+    /// Soft bloom from the blurred copy: amount.
+    Diffusion(f32),
+    /// Red glow from the blurred highlights: amount.
+    Halation(f32),
+    /// Vignette and grain: `[vignette, inner radius, grain cell, grain amount]` and the grain
+    /// pattern's number.
+    Finish([f32; 4], u32),
+}
 
-    // ---- Lens: diffusion (soft bloom), halation (red glow around highlights), vignette
-    if l.diffusion > 1e-3 {
-        let blur = soft_blur(img, l.diff_size * k * 0.5);
-        let dif = l.diffusion;
-        img.px.par_chunks_mut(4).zip(blur.px.par_chunks(4)).for_each(|(p, q)| {
-            for c in 0..3 {
-                p[c] = p[c] + (q[c].max(p[c]) - p[c]) * dif * 0.6 + q[c] * dif * 0.12;
-            }
-        });
-    }
-    if l.halation > 1e-3 {
-        // the glow is wide: find and blur the highlights on a quarter-size copy
-        let (small, f) = if img.w >= 256 && img.h >= 256 { (img.downsample2().downsample2(), 4.0) } else { (img.clone(), 1.0) };
-        let mut hi = highlights(&small, 0.72, 0.18);
-        gaussian(&mut hi, 9.0 * k / f, 9.0 * k / f, true);
-        let hi = if f > 1.0 { super::fast::enlarge(&hi, img.w, img.h) } else { hi };
-        let tint = [1.0f32, 0.22, 0.06];
-        let amt = l.halation * 0.9;
-        let w = img.w;
-        img.px.par_chunks_mut(w * 4).zip(hi.px.par_chunks(w * 4)).for_each(|(row, hrow)| {
-            for x in 0..w {
-                let hp = &hrow[x * 4..x * 4 + 4];
-                let lum = luma([hp[0], hp[1], hp[2]]) * amt;
-                if lum > 1e-5 {
-                    add_light(&mut row[x * 4..x * 4 + 4], [tint[0] * lum, tint[1] * lum, tint[2] * lum]);
-                }
-            }
-        });
-    }
-    // ---- Vignette and film grain (strongest in the midtones) in one finishing pass
-    if l.vignette > 1e-3 || l.grain > 1e-3 {
-        let (w, h) = (img.w as f32, img.h as f32);
-        let (cxp, cyp) = (w / 2.0, h / 2.0);
-        let inner = l.vig_size * 0.7;
-        let vig = if l.vignette > 1e-3 { l.vignette * 0.85 } else { 0.0 };
-        let cell = (l.grain_size * k).max(0.35);
-        let amt = if l.grain > 1e-3 { l.grain * 0.16 } else { 0.0 };
+impl LookOp {
+    pub fn eval(e: &EffectInstance, cx: &FxCtx, w: usize, h: usize) -> Self {
+        let strength = (fv(e, "strength", cx) / 100.0).clamp(0.0, 1.0);
+        let strength = if strength.is_finite() { strength } else { 1.0 };
+        let l = scaled(look_params(e, cx), strength);
         // a new grain pattern every frame
         let seed = seed_of(e, cx).wrapping_add(0x6772_6169) ^ (cx.t.0 as u64).wrapping_mul(0x9E37_79B9);
-        let tile = if amt > 0.0 { super::fast::grain(seed) } else { Vec::new() };
-        let wi = img.w;
-        img.px.par_chunks_mut(wi * 4).enumerate().for_each(|(y, row)| {
-            let dy = (y as f32 + 0.5 - cyp) / cyp;
-            let v = y as f32 / cell;
-            for x in 0..wi {
-                let p = &mut row[x * 4..x * 4 + 4];
-                let a = p[3];
-                if a <= 1e-6 {
-                    continue;
-                }
-                let mut m = 1.0;
-                if vig > 0.0 {
-                    let dx = (x as f32 + 0.5 - cxp) / cxp;
-                    let r = (dx * dx + dy * dy).sqrt() / std::f32::consts::SQRT_2 * 1.2;
-                    m = 1.0 - vig * smoothstep(inner, inner + 0.7, r);
-                }
-                if amt > 0.0 {
-                    let u = x as f32 / cell;
-                    let g = super::fast::grain_at(&tile, u, v) * 1.4 + super::fast::grain_at(&tile, u * 2.1 + 71.3, v * 2.1 + 19.7) * 0.6;
-                    let mut d = enc([p[0] / a * m, p[1] / a * m, p[2] / a * m]);
-                    let yv = luma(d).clamp(0.0, 1.0);
-                    let wgt = 1.0 - (2.0 * yv - 1.0).abs() * 0.6;
-                    for c in &mut d {
-                        *c += g * amt * wgt;
+        Self { l, seed, w, h }
+    }
+
+    /// Every number is finite (the graphics card gets no others).
+    pub fn finite(&self) -> bool {
+        let l = &self.l;
+        [l.skin, l.exposure, l.contrast, l.saturation, l.temp, l.tint, l.sh_amt, l.hi_amt, l.fade, l.rolloff, l.diffusion, l.diff_size, l.halation]
+            .iter()
+            .chain(&[l.vignette, l.vig_size, l.grain, l.grain_size])
+            .chain(&l.sh_col)
+            .chain(&l.hi_col)
+            .all(|v| v.is_finite())
+    }
+
+    fn color_on(&self) -> bool {
+        let l = &self.l;
+        (l.exposure.abs() > 1e-4)
+            || l.contrast.abs() > 1e-4
+            || (l.saturation - 1.0).abs() > 1e-4
+            || l.temp.abs() > 1e-4
+            || l.tint.abs() > 1e-4
+            || l.sh_amt > 1e-4
+            || l.hi_amt > 1e-4
+            || l.fade > 1e-4
+            || l.rolloff > 1e-4
+    }
+
+    fn white_balance(&self) -> [f32; 3] {
+        let l = &self.l;
+        [1.0 + 0.25 * l.temp, 1.0 - 0.2 * l.tint.max(0.0) + 0.1 * (-l.tint).max(0.0), 1.0 - 0.25 * l.temp]
+    }
+
+    /// The steps for the graphics card on the working image (empty: nothing to do). The blurs
+    /// run at full size there, where the CPU works on reduced copies; the result is the same
+    /// look, not the same numbers.
+    pub fn passes(&self) -> Vec<LookPass> {
+        let l = &self.l;
+        let k = (self.w as f32 / 1920.0).max(1e-3);
+        let blur = |sigma: f32| {
+            let (rx, ry) = crate::effects::gaussian_boxes(self.w, self.h, sigma, sigma);
+            LookPass::Blur { rx, ry }
+        };
+        let mut out = Vec::new();
+        if l.skin > 1e-3 {
+            out.push(blur(5.0 * k));
+            out.push(LookPass::Skin(l.skin));
+        }
+        if self.color_on() {
+            let gain = l.exposure.exp2();
+            let wb = self.white_balance();
+            let r = Roll::new(l.rolloff);
+            out.push(LookPass::Grade([
+                gain * wb[0],
+                gain * wb[1],
+                gain * wb[2],
+                l.contrast,
+                l.saturation,
+                l.sh_amt,
+                l.hi_amt,
+                l.fade,
+                l.sh_col[0],
+                l.sh_col[1],
+                l.sh_col[2],
+                if r.on { 1.0 } else { 0.0 },
+                l.hi_col[0],
+                l.hi_col[1],
+                l.hi_col[2],
+                r.top,
+                r.g,
+                r.inv,
+            ]));
+        }
+        if l.diffusion > 1e-3 {
+            out.push(blur(l.diff_size * k * 0.5));
+            out.push(LookPass::Diffusion(l.diffusion));
+        }
+        if l.halation > 1e-3 {
+            out.push(LookPass::Highlights);
+            out.push(blur(9.0 * k));
+            out.push(LookPass::Halation(l.halation * 0.9));
+        }
+        if l.vignette > 1e-3 || l.grain > 1e-3 {
+            let vig = if l.vignette > 1e-3 { l.vignette * 0.85 } else { 0.0 };
+            let amt = if l.grain > 1e-3 { l.grain * 0.16 } else { 0.0 };
+            out.push(LookPass::Finish([vig, l.vig_size * 0.7, (l.grain_size * k).max(0.35), amt], (self.seed ^ (self.seed >> 32)) as u32));
+        }
+        out
+    }
+
+    /// The CPU version.
+    pub fn apply(&self, img: &mut Image) {
+        if img.w == 0 || img.h == 0 {
+            return;
+        }
+        let l = self.l;
+        let k = hd(img) as f32;
+
+        // ---- Subject: edge-aware smoothing of skin tones
+        if l.skin > 1e-3 {
+            let blurred = soft_blur(img, 5.0 * k);
+            let skin = l.skin;
+            let w = img.w;
+            img.px.par_chunks_mut(w * 4).enumerate().for_each(|(y, row)| {
+                for x in 0..w {
+                    let p = &mut row[x * 4..x * 4 + 4];
+                    let a = p[3];
+                    if a <= 1e-6 {
+                        continue;
                     }
-                    let o = dec(d);
-                    p[0] = o[0] * a;
-                    p[1] = o[1] * a;
-                    p[2] = o[2] * a;
-                } else {
-                    p[0] *= m;
-                    p[1] *= m;
-                    p[2] *= m;
+                    // most pixels are not skin and are left alone at once
+                    let d = enc(Image::unpremul([p[0], p[1], p[2], a]));
+                    let tone = skin_mask(d);
+                    if tone <= 0.0 {
+                        continue;
+                    }
+                    let q = blurred.get(x, y);
+                    let dq = enc(Image::unpremul(q));
+                    // keep edges and texture borders: only smooth where the blur barely changes luma
+                    let edge = 1.0 - smoothstep(0.03, 0.12, (luma(d) - luma(dq)).abs());
+                    let m = skin * tone * edge;
+                    for c in 0..4 {
+                        p[c] += (q[c] - p[c]) * m;
+                    }
                 }
-            }
-        });
+            });
+        }
+
+        // ---- Color + Matte (+ Film grain, applied last in the same pass after the lens tools)
+        let gain = l.exposure.exp2();
+        let wb = self.white_balance();
+        if self.color_on() {
+            let rolloff = Roll::new(l.rolloff);
+            img.map_rgb(|c, _, _| {
+                let c = [c[0] * gain * wb[0], c[1] * gain * wb[1], c[2] * gain * wb[2]];
+                let mut d = enc(c);
+                // contrast: S-curve around mid grey (positive) or a flatter line (negative)
+                if l.contrast.abs() > 1e-4 {
+                    for v in &mut d {
+                        let x = v.clamp(0.0, 1.0);
+                        *v = if l.contrast > 0.0 {
+                            let s = x * x * (3.0 - 2.0 * x);
+                            x + (s - x) * l.contrast.min(1.0) * 1.2
+                        } else {
+                            0.5 + (x - 0.5) * (1.0 + l.contrast * 0.7)
+                        };
+                    }
+                }
+                // saturation around luma
+                let y = luma(d);
+                for v in &mut d {
+                    *v = y + (*v - y) * l.saturation;
+                }
+                // split toning (overlay of the tint colours, weighted to shadows / highlights)
+                let y = luma(d).clamp(0.0, 1.0);
+                if l.sh_amt > 1e-4 {
+                    let ws = (1.0 - y).powi(2) * l.sh_amt;
+                    let t = blend_simple(4, d, l.sh_col);
+                    for i in 0..3 {
+                        d[i] += (t[i] - d[i]) * ws;
+                    }
+                }
+                if l.hi_amt > 1e-4 {
+                    let wh = y * y * l.hi_amt;
+                    let t = blend_simple(4, d, l.hi_col);
+                    for i in 0..3 {
+                        d[i] += (t[i] - d[i]) * wh;
+                    }
+                }
+                // matte: highlight roll-off, then lifted blacks
+                for v in &mut d {
+                    *v = rolloff.at(v.clamp(0.0, 1.0));
+                    *v = l.fade + *v * (1.0 - l.fade);
+                }
+                dec(d)
+            });
+        }
+
+        // ---- Lens: diffusion (soft bloom), halation (red glow around highlights), vignette
+        if l.diffusion > 1e-3 {
+            let blur = soft_blur(img, l.diff_size * k * 0.5);
+            let dif = l.diffusion;
+            img.px.par_chunks_mut(4).zip(blur.px.par_chunks(4)).for_each(|(p, q)| {
+                for c in 0..3 {
+                    p[c] = p[c] + (q[c].max(p[c]) - p[c]) * dif * 0.6 + q[c] * dif * 0.12;
+                }
+            });
+        }
+        if l.halation > 1e-3 {
+            // the glow is wide: find and blur the highlights on a quarter-size copy
+            let (small, f) = if img.w >= 256 && img.h >= 256 { (img.downsample2().downsample2(), 4.0) } else { (img.clone(), 1.0) };
+            let mut hi = highlights(&small, 0.72, 0.18);
+            gaussian(&mut hi, 9.0 * k / f, 9.0 * k / f, true);
+            let hi = if f > 1.0 { super::fast::enlarge(&hi, img.w, img.h) } else { hi };
+            let tint = [1.0f32, 0.22, 0.06];
+            let amt = l.halation * 0.9;
+            let w = img.w;
+            img.px.par_chunks_mut(w * 4).zip(hi.px.par_chunks(w * 4)).for_each(|(row, hrow)| {
+                for x in 0..w {
+                    let hp = &hrow[x * 4..x * 4 + 4];
+                    let lum = luma([hp[0], hp[1], hp[2]]) * amt;
+                    if lum > 1e-5 {
+                        add_light(&mut row[x * 4..x * 4 + 4], [tint[0] * lum, tint[1] * lum, tint[2] * lum]);
+                    }
+                }
+            });
+        }
+        // ---- Vignette and film grain (strongest in the midtones) in one finishing pass
+        if l.vignette > 1e-3 || l.grain > 1e-3 {
+            let (w, h) = (img.w as f32, img.h as f32);
+            let (cxp, cyp) = (w / 2.0, h / 2.0);
+            let inner = l.vig_size * 0.7;
+            let vig = if l.vignette > 1e-3 { l.vignette * 0.85 } else { 0.0 };
+            let cell = (l.grain_size * k).max(0.35);
+            let amt = if l.grain > 1e-3 { l.grain * 0.16 } else { 0.0 };
+            let seed = self.seed;
+            let tile = if amt > 0.0 { super::fast::grain(seed) } else { Vec::new() };
+            let wi = img.w;
+            img.px.par_chunks_mut(wi * 4).enumerate().for_each(|(y, row)| {
+                let dy = (y as f32 + 0.5 - cyp) / cyp;
+                let v = y as f32 / cell;
+                for x in 0..wi {
+                    let p = &mut row[x * 4..x * 4 + 4];
+                    let a = p[3];
+                    if a <= 1e-6 {
+                        continue;
+                    }
+                    let mut m = 1.0;
+                    if vig > 0.0 {
+                        let dx = (x as f32 + 0.5 - cxp) / cxp;
+                        let r = (dx * dx + dy * dy).sqrt() / std::f32::consts::SQRT_2 * 1.2;
+                        m = 1.0 - vig * smoothstep(inner, inner + 0.7, r);
+                    }
+                    if amt > 0.0 {
+                        let u = x as f32 / cell;
+                        let g = super::fast::grain_at(&tile, u, v) * 1.4 + super::fast::grain_at(&tile, u * 2.1 + 71.3, v * 2.1 + 19.7) * 0.6;
+                        let mut d = enc([p[0] / a * m, p[1] / a * m, p[2] / a * m]);
+                        let yv = luma(d).clamp(0.0, 1.0);
+                        let wgt = 1.0 - (2.0 * yv - 1.0).abs() * 0.6;
+                        for c in &mut d {
+                            *c += g * amt * wgt;
+                        }
+                        let o = dec(d);
+                        p[0] = o[0] * a;
+                        p[1] = o[1] * a;
+                        p[2] = o[2] * a;
+                    } else {
+                        p[0] *= m;
+                        p[1] *= m;
+                        p[2] *= m;
+                    }
+                }
+            });
+        }
     }
 }
 

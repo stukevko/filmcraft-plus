@@ -52,6 +52,9 @@ jobs:
         run: |
           cargo clippy --locked -p filmcraft-platform --all-targets --target x86_64-pc-windows-msvc -- -D warnings
           cargo test --locked -p filmcraft-platform --lib --target x86_64-pc-windows-msvc media_foundation::encode
+          # Look Builder on the graphics card: the shader builds with FXC (as in the shipped app) and
+          # gives the CPU's picture (WARP stands in for a graphics card on the runner)
+          cargo test --locked -p filmcraft-gpu --lib --target x86_64-pc-windows-msvc -- look_builder with_fxc the_effect_shader --nocapture
       - name: Build
         run: cargo build --release --locked -p filmcraft --features whisper --target x86_64-pc-windows-msvc
       - name: Package

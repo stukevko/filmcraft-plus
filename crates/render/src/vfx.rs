@@ -30,6 +30,7 @@ mod immersive;
 pub(crate) mod inout;
 mod lights;
 mod plus;
+pub use plus::{LookOp, LookPass};
 mod portrait;
 mod stylize;
 mod temporal;

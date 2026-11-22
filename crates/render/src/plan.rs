@@ -216,6 +216,10 @@ fn gpu_chain<'a>(project: &Project, item: &'a TrackItem, opts: RenderOptions) ->
         if !e.enabled {
             continue;
         }
+        // FilmCraft Plus Animate In / Out only moves and fades the placed layer (`push_item`)
+        if e.effect == crate::vfx::inout::ID {
+            continue;
+        }
         let masked = e.masks.iter().any(|m| m.mode != filmcraft_project::MaskMode::None);
         if masked || !crate::gpufx::GPU_EFFECTS.contains(&e.effect.as_str()) {
             return None;
@@ -468,6 +472,15 @@ fn push_item(sc: Scene, item: &TrackItem, extra_opacity: f32, blend: Option<Blen
         let motion = motion_matrix(seq, item, size, crate::source_par(project, item.item), mt);
         let lin = ((motion.a * motion.a + motion.b * motion.b).sqrt()).max((motion.c * motion.c + motion.d * motion.d).sqrt());
         let want = (lin * opts.scale as f64).clamp(1.0 / 64.0, 1.0) as f32;
+        // FilmCraft Plus Animate In / Out: the placement of a `lw`×`lh` layer drawn with `m`, moved
+        // and faded at the clip's ends as `item_layer_ex` does on the CPU
+        let animated = |m: Affine, lw: f64, lh: f64| {
+            let (w, h) = output_size(seq, opts.scale);
+            let centre = m.apply(filmcraft_geom::Vec2::new(lw / 2.0, lh / 2.0));
+            let moved =
+                if opts.effects { crate::vfx::inout::placement(item, t, mt, centre, (w as f64, h as f64), seq.settings.frame_rate.as_f64()) } else { None };
+            (moved.map_or(m, |p| p.xf.then_apply(&m)), moved.map_or(1.0, |p| p.opacity))
+        };
         let time = crate::video_source_time(item, t, src.info().frame_rate());
         let Ok(frame) = src.video_frame(FrameRequest { time, scale: want }) else { return };
         let cs = crate::colorman::source_space(project, item.item, &frame);
@@ -502,7 +515,8 @@ fn push_item(sc: Scene, item: &TrackItem, extra_opacity: f32, blend: Option<Blen
                     .then_apply(&motion)
                     .then_apply(&Affine::scale(1.0 / px_scale as f64, 1.0 / px_scale as f64));
                 let fx = LayerFx { size: (lw as u32, lh as u32), decimation: n as u32, ops };
-                out.push(PlanLayer { frame, matrix: m, opacity: op * extra_opacity, blend: bl, fx: Some(Arc::new(fx)), input });
+                let (m, fade) = animated(m, lw as f64, lh as f64);
+                out.push(PlanLayer { frame, matrix: m, opacity: op * extra_opacity * fade, blend: bl, fx: Some(Arc::new(fx)), input });
                 return;
             }
         } else if plain {
@@ -517,7 +531,8 @@ fn push_item(sc: Scene, item: &TrackItem, extra_opacity: f32, blend: Option<Blen
             };
             let px_scale = frame.width as f64 / size.0.max(1) as f64;
             let m = Affine::scale(opts.scale as f64, opts.scale as f64).then_apply(&motion).then_apply(&Affine::scale(1.0 / px_scale, 1.0 / px_scale));
-            out.push(PlanLayer { input, ..PlanLayer::new(frame, m, op * extra_opacity, bl) });
+            let (m, fade) = animated(m, frame.width as f64, frame.height as f64);
+            out.push(PlanLayer { input, ..PlanLayer::new(frame, m, op * extra_opacity * fade, bl) });
             return;
         }
     }

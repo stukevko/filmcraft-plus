@@ -269,3 +269,28 @@ fn hostile_pixel_aspect_ratios_render_square_without_panicking() {
         assert!(img.px.iter().all(|v| v.is_finite()), "{src:?} {par:?}");
     }
 }
+
+/// FilmCraft Plus: a clip with only Animate In / Out stays a layer the graphics card places (no
+/// CPU-rendered canvas), and comes in exactly as on the CPU.
+#[test]
+fn the_gpu_plan_animates_a_clip_in_like_the_cpu() {
+    let (mut p, seq, _, map) = project((192, 108), (1, 1), (192, 108), (1, 1), false);
+    let mut e = filmcraft_project::find_effect("animate_in_out").expect("effect").instance();
+    // Slide from Left
+    e.param_mut("style").expect("style").value = filmcraft_project::ParamValue::Choice(3);
+    p.sequence_mut(seq).unwrap().video_tracks[0].items[0].effects.push(e);
+    let resting = row(&render_sequence(&p, seq, FPS.tick_of(12), RenderOptions::default(), &map));
+    let mut moved = 0;
+    for f in [0, 1, 2, 3, 12] {
+        let t = FPS.tick_of(f);
+        let want = row(&render_sequence(&p, seq, t, RenderOptions::default(), &map));
+        let frame_plan = plan::plan_frame(&p, seq, t, RenderOptions::default(), &map);
+        match &frame_plan {
+            plan::FramePlan::Layers { layers, .. } => assert!(layers.iter().all(|l| l.matrix != Affine::IDENTITY || f == 12), "frame {f}: placed by the plan"),
+            _ => panic!("frame {f}: the clip left the GPU path"),
+        }
+        assert_row(&row(&plan::execute_cpu(&frame_plan)), &want);
+        moved += (want != resting) as u32;
+    }
+    assert!(moved >= 2, "the clip slides in over the first frames");
+}
